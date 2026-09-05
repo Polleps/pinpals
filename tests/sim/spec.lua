@@ -306,6 +306,70 @@ return function(H)
         ("the cluster is barely live: %.2f hits/s"):format(total / 120))
     end)
 
+    it("a received ball can be passed on -- the rally can actually continue",
+       function()
+      -- Every other pass test here starts from a ball resting on a flipper,
+      -- which is a perfectly timed shot from a perfectly placed ball. The
+      -- rally is made of RECEIVED balls: they arrive from the tube, fall, and
+      -- have to be caught and sent back. A board where that is impossible has
+      -- no rally regardless of how good its static pass rate looks.
+      --
+      -- Measured in tests/probe_timing.lua, with a player who predicts
+      -- contact rather than flipping on a fixed delay: 63% on Foundry and 85%
+      -- on Glasshouse at best timing. This floor is well under both.
+      local function received_pass_rate(def, lead)
+        local made, tried = 0, 0
+        for i = 1, 16 do
+          math.randomseed(4242 + i * 977)
+          local b = Board.new(def)
+          local e = def.entry
+          local speed = C.TRANSIT_MIN_SP
+                      + (C.TRANSIT_MAX_SP - C.TRANSIT_MIN_SP) * math.random()
+          local ang = math.atan2(e.dir.y, e.dir.x) + (math.random() * 2 - 1) * 0.10
+          run(b, 0.45, cmd(true, false))
+          b:spawn(e.x + (math.random() * 2 - 1) * 6, e.y,
+                  math.cos(ang) * speed, math.sin(ang) * speed)
+          local fired, held, side = false, 0, nil
+          local mid, got = def.size.w / 2, false
+          for _ = 1, math.floor(6 * C.TICK_HZ) do
+            local bx, by = b:ball_pos()
+            if not bx then break end
+            local _, vy = b:ball_velocity()
+            if not fired and vy > 0 and by < 688 and (688 - by) / vy <= lead then
+              fired, held = true, 0
+              side = (bx < mid) and "left" or "right"
+            end
+            local flipping = false
+            if fired then
+              held = held + 1
+              flipping = held < math.floor(0.22 * C.TICK_HZ)
+            end
+            local over = false
+            for _, ev in ipairs(b:step(cmd(true, false,
+                                  flipping and side == "left",
+                                  flipping and side == "right"), true)) do
+              if ev.kind == "tube" then got = true; over = true end
+              if ev.kind == "drain" then over = true end
+            end
+            if over then break end
+          end
+          tried = tried + 1
+          if got then made = made + 1 end
+        end
+        return made / tried
+      end
+
+      for _, id in ipairs({ "a", "b" }) do
+        local best = 0
+        for _, lead in ipairs({ 0.01, 0.02, 0.03, 0.04, 0.05 }) do
+          best = math.max(best, received_pass_rate(boards[id], lead))
+        end
+        A.truthy(best >= 0.30,
+          ("board %s cannot pass a ball it received: %.0f%% at best timing")
+            :format(id, 100 * best))
+      end
+    end)
+
     it("and the raised post makes it harder without making it impossible (§6.2)",
        function()
       -- Both halves matter, and the device previously failed both.

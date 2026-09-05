@@ -183,6 +183,15 @@ function Board:ball_speed()
   return math.sqrt(vx * vx + vy * vy)
 end
 
+--- Velocity components. Anything predicting where the ball is going -- a
+--- timing probe, and later an AI opponent or a replay scrubber -- needs the
+--- direction, which the scalar speed above throws away.
+---@return number vx, number vy
+function Board:ball_velocity()
+  if not self.ball or self.ball:isDestroyed() then return 0, 0 end
+  return self.ball:getLinearVelocity()
+end
+
 --- Serve from the plunger lane (§ board data `serve`).
 function Board:serve()
   local s = self.def.serve

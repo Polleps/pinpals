@@ -189,8 +189,22 @@ They are choices to react to, not decisions.
   legible trade, but while it is up the flipper player has nothing productive to
   do, which brushes against pillar 1 ("nobody waits"). Narrowing it, or letting
   flat shots under it, is the obvious first tuning knob.
-- **The pass may be too easy** at ~60% from a static, perfectly timed flip. A real
-  moving ball is harder, so this needs a human before it is tuned.
+- ~~The pass may be too easy~~ **It is not.** Measured from a ball that actually
+  arrives out of the tube, with a player who predicts contact rather than flipping on
+  a fixed cue, the peak rates are 63% (Foundry) and 85% (Glasshouse) — but the
+  *timing window* is the real number, and it is narrow:
+
+  | board | peak | window at ≥ half peak |
+  |---|---|---|
+  | Foundry | 63% | **20ms** |
+  | Glasshouse | 85% | 50ms |
+
+  A 60fps frame is 17ms, so receiving on Foundry gives the player roughly one frame
+  of usable information. That is a playability concern in the opposite direction from
+  the one this bullet used to raise, and it needs a human at the keyboard to judge.
+
+  Not the bumper cluster: removing it raises Foundry's peak to 72% and leaves the
+  window at 20ms. What actually sets the window is still open.
 - **Glasshouse is thin.** Two bare rails is not yet a character, just an absence
   of one. It needs whatever answers §13.1 properly.
 - **The upper playfields are empty.** Both boards are mostly a ramp plus space.
