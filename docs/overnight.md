@@ -78,7 +78,7 @@ Give the flipper player something to shoot while holding the ball, so not passin
 real choice (§5: "passing must be tempting, not compulsory"). Data-only where possible;
 `make geometry` is the guard against bad coordinates.
 
-### 6. Glasshouse is thin — answer §13.1  ·  TODO
+### 6. Glasshouse is thin — answer §13.1  ·  DONE (5a4c5c3)
 
 "Two bare rails is not yet a character, just an absence of one." Board identity is the
 reason to pass, so this blocks everything about the pass being a decision. Make the
@@ -285,5 +285,51 @@ That was the probe holding the flipper up for the whole 6s trace, which parks it
 of the way and leaves a notch at the pivot no ball can escape. With a realistic
 press-and-release it is 0%. The geometry gate was right and my instrument was wrong
 — worth remembering before trusting the next number it produces.
+
+### Iteration 6 — §13.1 answered, and it was backwards · `5a4c5c3`
+
+The identities had never been measured. When I measured them:
+
+| board | gap | ball life | drains/s | pts/s | survival |
+|---|---|---|---|---|---|
+| Foundry ("forgiving") | 33.6 | 10.22s | **0.0815** | 26 | 15% |
+| Glasshouse ("punishing") | 43.6 | 9.86s | 0.0777 | 125 | 27% |
+
+**Foundry drained more often per second than Glasshouse despite a 10px narrower gap**,
+while also being harder to pass from and worth less — worse on every axis at once. Not
+an identity, a bug wearing one.
+
+Now, after narrowing Foundry's drain and giving Glasshouse a target bank:
+
+| board | gap | ball life | drains/s | pts/s |
+|---|---|---|---|---|
+| Foundry | 27.6 | **12.19s** | **0.0725** | 24 |
+| Glasshouse | 43.6 | 9.05s | 0.0810 | **351** |
+
+Answer written into `design.md` §7 as PROVISIONAL: **Foundry is where a rally survives,
+Glasshouse is where it pays.** 15× the points per second, a ball that dies a third
+faster. That puts §6.2's trade onto the pass itself.
+
+**Three times the measurements overruled me this iteration:**
+
+1. **The bank is two targets, not three.** The rail splits the ball into streams at
+   x=244 and x=336 with nothing down the middle; a three-target row puts its middle at
+   x=290 (geometry forbids closer) where it took 4 hits against 50 and 52. A bank whose
+   middle can't be reached never completes — worse than no bank, because it visibly
+   exists and silently can't be finished.
+2. **Fixing that by moving the rail broke the board.** The distribution balanced
+   beautifully at 18/24/12 — and mean ball life went to 30.00s, the probe's timeout,
+   with a drain rate of *exactly zero*. The ball rattled in the bank forever. Only
+   having ball life in the same table caught it. A pretty distribution nearly shipped a
+   board the ball cannot leave.
+3. **Narrowing Foundry's drain woke a sleeping pocket** beside the pivots — always
+   there, never reached, until the ball started spending time down there. Preserving
+   the old 7px wall-to-pivot offset did *not* fix it (14% stuck); pulling back to 9.9px
+   did.
+
+New `target` device kind (scores, lights, forms banks) and two new geometry checks. The
+target-to-target wedge check caught this very commit's first draft: three targets 33px
+apart at 34px wide, overlapping into one bar on screen. **Only the screenshot revealed
+it** — which is twice now that looking at the render found what the gates could not.
 
 *(iterations append here)*
