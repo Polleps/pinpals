@@ -218,6 +218,94 @@ return function(H)
       end
     end
 
+    it("a: the ramp is not the only shot on the board", function()
+      -- The companion to the test above, and the more important one. With the
+      -- ramp mouth at y=600 the pass test passed at 62% while the board had
+      -- exactly ONE shot: a sweep of 50 contact points found 0% reaching
+      -- anywhere else on the playfield. A board where every shot has the same
+      -- outcome gives the flipper player nothing to decide, which is pillar 1
+      -- ("nobody waits") broken in the geometry rather than in the rules.
+      --
+      -- So: some shot, from somewhere on some flipper, must get the ball up
+      -- the board OUTSIDE the ramp channel.
+      -- Same spawn geometry as tests/probe_reach.lua, which is where the
+      -- 14%/10% orbit figures in board_a.lua's comments come from. Resting
+      -- the ball ON the flipper and then flipping is the shot a player is
+      -- actually trying to make.
+      local def, escaped, tried = boards.a, 0, 0
+      for _, side in ipairs({ "left", "right" }) do
+        local spec
+        for _, f in ipairs(def.flippers) do if f.side == side then spec = f end end
+        local sign = (side == "left") and 1 or -1
+        local ang  = (side == "left") and C.FLIPPER_REST or -C.FLIPPER_REST
+        for frac = 0.30, 1.00, 0.06 do
+          local b = Board.new(def)
+          local d = C.FLIPPER_LEN * frac
+          b:spawn(spec.x + math.cos(ang) * d * sign,
+                  spec.y + math.sin(ang) * d * sign - C.BALL_RADIUS - 2, 0, 0)
+          run(b, 0.12, cmd())                       -- settle onto the flipper
+          local held = cmd(true, false, side == "left", side == "right")
+          local rest = cmd(true, false)
+          local c, out = held, false
+          for tick = 1, math.floor(4.0 * C.TICK_HZ) do
+            if tick == math.floor(0.22 * C.TICK_HZ) then c = rest end
+            local gone = false
+            for _, ev in ipairs(b:step(c, true)) do
+              if ev.kind == "tube" or ev.kind == "drain" then gone = true end
+            end
+            if gone then break end
+            local bx, by = b:ball_pos()
+            if not bx then break end
+            -- Above the ramp neck and outside its channel: an orbit lane.
+            if by < 520 and (bx < 180 or bx > 250) then out = true break end
+          end
+          tried = tried + 1
+          if out then escaped = escaped + 1 end
+        end
+      end
+      A.truthy(escaped >= 2,
+        ("board a has only one shot again: %d of %d swept shots left the ramp")
+          :format(escaped, tried))
+    end)
+
+    it("a: every bumper is reachable in play", function()
+      -- Foundry's declared character is a bumper cluster that "keeps the ball
+      -- alive". Two of its three bumpers were once hit exactly zero times in
+      -- 180s, because the cluster sat in a dead band between the orbit lane
+      -- and the ramp. A bumper nothing can reach is scenery, and this is the
+      -- test that says so out loud.
+      local def = boards.a
+      local seen, total = {}, 0
+      for seed = 1, 3 do
+        math.randomseed(4100 + seed)
+        local b = Board.new(def)
+        b:serve()
+        local c = cmd()
+        for i = 1, math.floor(40 * C.TICK_HZ) do
+          if i % 30 == 0 then
+            c = cmd(math.random() < 0.55, math.random() < 0.2,
+                    math.random() < 0.35, math.random() < 0.35)
+          end
+          local dead = false
+          for _, ev in ipairs(b:step(c, b.ball ~= nil)) do
+            if ev.kind == "drain" or ev.kind == "tube" then dead = true end
+            if ev.kind == "bumper" then
+              seen[ev.index] = (seen[ev.index] or 0) + 1
+              total = total + 1
+            end
+          end
+          if dead then b:serve() end
+        end
+      end
+      for i = 1, #def.bumpers do
+        A.truthy((seen[i] or 0) > 0,
+          ("bumper %d is unreachable: it is scenery, not a device"):format(i))
+      end
+      -- Measured 0.60/s over 6 seeds; this floor is well under the noise.
+      A.truthy(total / 120 > 0.15,
+        ("the cluster is barely live: %.2f hits/s"):format(total / 120))
+    end)
+
     it("but not while the post is up -- the device is a real trade (§6.2)", function()
       -- If raising the post cost nothing, the operator would just hold it up
       -- forever and there would be no conversation to have. Measured: the
