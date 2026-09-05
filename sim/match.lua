@@ -19,6 +19,10 @@ function Match.new(boards)
   self.acc    = 0
   self.alpha  = 0
   self.pending = {}
+  -- Presentation feed: impacts and flow events for app/ to drain each frame.
+  -- Bounded, because a headless run drains nothing and would otherwise grow
+  -- one table per contact for the length of the test.
+  self.feed    = {}
   self.prev = { a = self:_snapshot("a"), b = self:_snapshot("b") }
   self.cur  = { a = self.prev.a, b = self.prev.b }
   return self
@@ -63,11 +67,14 @@ function Match:_tick()
 
   -- Step both worlds. The dormant board has no ball but keeps simulating, so
   -- its devices hold and animate the state the operator left them in (§7).
+  -- Rules see flow events only. Impacts are presentation and never reach
+  -- core/, which has no opinion about how hard the ball hit something.
   local events = {}
   for id, b in pairs(self.boards) do
     local has_ball = b.ball ~= nil
     for _, ev in ipairs(b:step(s.boards[id], has_ball)) do
-      events[#events+1] = ev
+      if ev.kind ~= "impact" then events[#events+1] = ev end
+      self:_feed(ev)
     end
   end
 
@@ -78,6 +85,25 @@ function Match:_tick()
   elseif s.phase == "drain" then
     for _, b in pairs(self.boards) do b:despawn() end
   end
+end
+
+local FEED_MAX = 96
+
+--- Append to the presentation feed, dropping the oldest once full. A frame
+--- that renders drains this; a headless run never does, which is exactly why
+--- it is capped.
+function Match:_feed(ev)
+  local f = self.feed
+  f[#f+1] = ev
+  if #f > FEED_MAX then table.remove(f, 1) end
+end
+
+--- Hand app/ everything that happened since the last call, and clear.
+---@return table[] events
+function Match:drain_events()
+  local f = self.feed
+  self.feed = {}
+  return f
 end
 
 --- §4.1: accumulate real time, consume it in fixed chunks. The simulation

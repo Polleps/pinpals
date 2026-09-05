@@ -57,6 +57,24 @@ C.SERVE_SPEED    = 1050        -- px/s off the plunger; enough to reach the gate
 C.SERVE_DELAY    = 0.60        -- pause before a ball is served
 C.DRAIN_DELAY    = 0.90        -- pause after a drain before re-serve
 
+-- Impacts (presentation only) ------------------------------------------------
+-- sim/ reports ball contacts so app/ can sound and light them. The floor
+-- separates a hit from a lean: a ball merely resting on a surface still
+-- solves a contact impulse every step, and at 240 Hz an unfiltered feed is a
+-- machine-gun rather than a set of hits.
+--
+-- That resting impulse is not a matter of taste, it is the ball's own weight
+-- carried for one step: m*g*dt, reported by Box2D in pixel units. Measuring
+-- 240s of play put 90% of wall contacts at 0.249-0.250 against a predicted
+-- 0.2519 -- the cluster IS the ball sitting still. So the floor is defined as
+-- a margin above that, and any real bounce clears it comfortably: an impact
+-- at v m/s solves about m*v*(1+e)*METER, so even a 0.05 m/s nudge lands at
+-- 0.34. Event rate across the cliff: 96.9/s at 0.20, 7.2/s at 0.30.
+C.BALL_MASS           = C.BALL_DENSITY * math.pi * 0.135 * 0.135   -- kg
+C.IMPACT_REST_IMPULSE = C.BALL_MASS * C.GRAVITY_MS2 * C.FIXED_DT * C.METER
+C.IMPACT_MIN_IMPULSE  = C.IMPACT_REST_IMPULSE * 1.19   -- 0.300
+C.IMPACT_MAX_PER_STEP = 4      -- one ball cannot meaningfully hit more
+
 -- §6.1 Operator devices: persistent states, never impulses.
 C.GATE_THICK     = 9           -- gate arm thickness; core/geometry.lua needs it
 -- Travel times are deliberately long enough to read across a room.

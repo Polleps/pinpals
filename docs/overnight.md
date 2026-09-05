@@ -5,6 +5,7 @@ at `9a5060b`. **This file is the state the loop resumes from.** Every iteration
 reads it, takes the top unstarted item, and writes back what happened.
 
 Polle's calls before bed:
+
 - **Focus:** all four axes — juice/feedback, playfield content, tuning, harness.
 - **Git:** one branch, one commit per change, measurements in the message.
 - **Latitude:** make the OPEN calls in `design.md` §13, document each as provisional.
@@ -46,6 +47,7 @@ the answer is "give the flipper player something to do while it's up".
 Status: TODO / DOING / DONE / BLOCKED. Newest notes at the bottom of each item.
 
 ### 1. Audio — the game makes no sound at all  ·  TODO
+
 `§10: audio does the warning work.` The module is switched off. Synthesize waveforms
 at load (`love.sound.newSoundData`) rather than shipping asset files — keeps the repo
 text-only and the footprint at zero. Needs: flipper thwack, bumper pop, gate travel
@@ -53,47 +55,60 @@ loop, tube whoosh, arrival warning, drain. Pitch rises with relay heat.
 Lives in `app/`. Must degrade silently when audio is unavailable (headless tests).
 
 ### 2. Visual juice — impacts, shake, trail  ·  TODO
+
 Bumper pop, flipper contact flash, ball trail scaled to speed, screenshake on drain,
 device travel telegraphed rather than snapping. All in `app/render.lua`; the sim must
 not learn about any of it. Guard: `make shot` still renders, `check_layers.sh` clean.
 
 ### 3. Tube transit gets its beat  ·  TODO
+
 §10 wants the camera to pull out and show the ball crossing between both boards. Right
 now it is ~800ms of dead air. This is the game's signature moment and it currently
 reads as a pause.
 
 ### 4. Relay heat as real scoring  ·  TODO
+
 §9: the multiplier lives on passing, not on shots. Score model in `core/` (pure, unit
 tested), readout in `app/`. Heat rises per crossing, resets on drain — a risk curve
 generated entirely by cooperation. Answers §13.2 partially; write it up PROVISIONAL.
 
 ### 5. Board A upper playfield has nothing in it  ·  TODO
+
 Give the flipper player something to shoot while holding the ball, so not passing is a
 real choice (§5: "passing must be tempting, not compulsory"). Data-only where possible;
 `make geometry` is the guard against bad coordinates.
 
 ### 6. Glasshouse is thin — answer §13.1  ·  TODO
+
 "Two bare rails is not yet a character, just an absence of one." Board identity is the
 reason to pass, so this blocks everything about the pass being a decision. Make the
 call, document as PROVISIONAL in `design.md`.
 
 ### 7. Cross-board state — the design's core hook, entirely absent  ·  TODO
+
 §7: completing something on A arms something on B; you play A to prepare B, pass, cash
 in, which arms A again. This is the thing that makes two boards a *game* rather than
 two boards. Depends on 5 and 6.
 
 ### 8. The post is too absolute  ·  TODO
+
 Blocks 20/32 → 0/32 of pass shots. Legible, but it parks the flipper player, which
 brushes pillar 1. Try narrowing it / letting flat shots under. Target: a number
 meaningfully above 0 that still makes the guard a real trade. Measure both.
 
 ### 9. Pass difficulty off a moving ball  ·  TODO
+
 ~60% is measured off a static, perfectly timed flip, which is not the game. Measure
 from realistic incoming trajectories, then tune.
 
 ### 10. Playtest capture so tomorrow produces data  ·  TODO
+
 §5.1 gets recording free from the intent stream. A session that writes intents + stats
 turns Polle's morning play into a measurement instead of an impression.
+
+### 11+ Think of other ways to improve the game
+
+If you're already here and the night's not over yet. Continue working on the game, think of cool things to add, or improve. Document them and add them.
 
 ---
 

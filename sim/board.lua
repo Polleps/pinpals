@@ -125,7 +125,10 @@ function Board.new(def)
   build_devices(self, def)
   for _, spec in ipairs(def.flippers) do build_flipper(self, def, spec) end
 
-  self.world:setCallbacks(function(fa, fb, coll) self:_begin(fa, fb, coll) end)
+  self.world:setCallbacks(
+    function(fa, fb, coll) self:_begin(fa, fb, coll) end,
+    nil, nil,
+    function(fa, fb, coll, ni) self:_postsolve(fa, fb, coll, ni) end)
   return self
 end
 
@@ -191,6 +194,31 @@ function Board:_begin(fa, fb, _)
   if other.kind == "mouth" then
     self.events[#self.events+1] = { kind = "tube", board = self.id, speed = self:ball_speed() }
   end
+end
+
+--- Impacts, for presentation only: app/ turns these into sound and light.
+--- Reported from postSolve rather than beginContact because the solver's
+--- normal impulse is the actual strength of the hit, where a begin-contact
+--- event only says that one happened -- a ball resting on the post and a ball
+--- slammed into it are the same event and wildly different sounds.
+---
+--- A resting ball generates a small impulse every step, so the threshold is
+--- what separates a hit from a lean. It is measured, not guessed: see
+--- `tests/probe_impulses.lua`.
+function Board:_postsolve(fa, fb, coll, normal_impulse)
+  if normal_impulse < C.IMPACT_MIN_IMPULSE then return end
+  if #self.events >= C.IMPACT_MAX_PER_STEP then return end
+  local a, b = fa:getUserData(), fb:getUserData()
+  if not (a and b) then return end
+  local other
+  if a.kind == "ball" then other = b elseif b.kind == "ball" then other = a else return end
+  if other.kind == "mouth" then return end
+  local x, y = coll:getPositions()
+  if not x then x, y = self:ball_pos() end
+  self.events[#self.events+1] = {
+    kind = "impact", board = self.id, what = other.kind,
+    x = x, y = y, impulse = normal_impulse,
+  }
 end
 
 ---------------------------------------------------------------------------

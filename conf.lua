@@ -19,8 +19,11 @@ function love.conf(t)
 
   t.modules.joystick   = true
   t.modules.physics    = true
-  t.modules.audio      = false
-  t.modules.sound      = false
+  -- app/audio.lua synthesizes its whole kit at load, so these buy us sound
+  -- without adding a single asset file. Switched off again under --test
+  -- below: the headless runner has no output device.
+  t.modules.audio      = true
+  t.modules.sound      = true
   t.modules.video      = false
   t.modules.touch      = false
 
@@ -28,5 +31,7 @@ function love.conf(t)
     t.modules.window   = false
     t.modules.graphics = false
     t.modules.joystick = false
+    t.modules.audio    = false
+    t.modules.sound    = false
   end
 end

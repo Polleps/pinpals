@@ -14,7 +14,7 @@ for i, v in ipairs(arg or {}) do
   if v == "--pass" then shot_open = true; shot_pass = true end
 end
 
-local match, render, input, boards
+local match, render, input, audio, boards
 local debug_on = false
 local shot_done = false
 
@@ -32,7 +32,9 @@ function love.load()
   match  = Match.new(boards)
   render = require("app.render")
   input  = require("app.input")
+  audio  = require("app.audio")
   render.load(boards)
+  audio.load()          -- no-ops if the audio modules are off (--shot, --test)
 
   if mode == "shot" then
     -- Stand in for an operator holding the gate open, so a screenshot can
@@ -59,6 +61,7 @@ end
 function love.update(dt)
   if mode ~= "play" then return end
   match:advance(dt)
+  audio.update(match)
   render.update_camera(match.state, boards, dt)
 end
 

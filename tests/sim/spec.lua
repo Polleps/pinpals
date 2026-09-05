@@ -404,4 +404,73 @@ return function(H)
       end
     end)
   end)
+
+  ---------------------------------------------------------------------------
+  -- Impact events. Presentation only, but they are a contract app/ relies on
+  -- and the threshold behind them is the difference between a set of hits and
+  -- a 240 Hz buzz.
+  ---------------------------------------------------------------------------
+
+  describe("impact events", function()
+    local function impacts_of(m, ticks)
+      local out = {}
+      for _ = 1, ticks do
+        m:run(1)
+        for _, ev in ipairs(m:drain_events()) do
+          if ev.kind == "impact" then out[#out+1] = ev end
+        end
+      end
+      return out
+    end
+
+    it("reports a hit with a surface, a place and a strength", function()
+      local m = Match.new(boards)
+      m:run(C.TICK_HZ)                                  -- let the serve happen
+      m.boards.a:spawn(215, 300, 0, 900)                -- straight down, hard
+      local hits = impacts_of(m, C.TICK_HZ * 2)
+      A.truthy(#hits > 0, "a ball driven into the floor reported no impact")
+      for _, ev in ipairs(hits) do
+        A.truthy(ev.what ~= nil and ev.x ~= nil and ev.y ~= nil, "malformed impact")
+        A.truthy(ev.impulse >= C.IMPACT_MIN_IMPULSE, "impact under the floor got through")
+        A.truthy(ev.what ~= "mouth", "the tube sensor must not report as a contact")
+      end
+    end)
+
+    it("goes silent once the ball is only resting on something", function()
+      -- The reason the threshold exists. A ball sitting on the raised post
+      -- solves a contact impulse every single step; without a floor above the
+      -- ball's own weight that is 240 events a second, forever.
+      local m = Match.new(boards)
+      m.state.boards.a.devices.post.commanded = true
+      m:run(C.TICK_HZ)
+      m.boards.a:spawn(192, 600, 0, 0)                  -- drop onto the post
+      impacts_of(m, C.TICK_HZ * 4)                      -- settle
+      local resting = impacts_of(m, C.TICK_HZ * 2)
+      A.equal(0, #resting, "a resting ball is still reporting impacts")
+    end)
+
+    it("carries impacts on the feed and nowhere else", function()
+      -- §5: core/ has no opinion about how hard the ball hit something. The
+      -- other half of this invariant -- that core.consume ignores an impact
+      -- even if one reaches it -- is asserted in the core spec, where it
+      -- needs no physics.
+      local m = Match.new(boards)
+      m.state.boards.a.devices.gate.commanded = true
+      local kinds = {}
+      for _ = 1, C.TICK_HZ * 6 do
+        m:run(1)
+        for _, ev in ipairs(m:drain_events()) do kinds[ev.kind] = true end
+      end
+      A.truthy(kinds.impact, "no impact ever reached the presentation feed")
+    end)
+
+    it("bounds the feed when nothing drains it", function()
+      -- A headless run never drains, so an uncapped feed grows one table per
+      -- contact for the length of the test.
+      local m = Match.new(boards)
+      m.state.boards.a.devices.gate.commanded = true
+      m:run(C.TICK_HZ * 20)
+      A.truthy(#m.feed <= 96, "feed grew unbounded: " .. #m.feed)
+    end)
+  end)
 end

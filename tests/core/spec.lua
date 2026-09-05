@@ -182,4 +182,30 @@ return function(H)
       A.truthy(s.boards.a.devices.gate.commanded, "board A forgot what the operator did")
     end)
   end)
+  ---------------------------------------------------------------------------
+  -- §5 layering. Impacts are presentation: sim/ reports them so app/ can
+  -- sound and light them, and the rules must stay blind to them. A scoring
+  -- rule that quietly started keying off contact strength would break the
+  -- headless tests and the online plan at the same time.
+  ---------------------------------------------------------------------------
+  describe("presentation events are not rules", function()
+    it("ignores impacts entirely", function()
+      local s = state.new(boards)
+      s.phase = "play"
+      local before = {
+        phase = s.phase, passes = s.stats.passes,
+        drains = s.stats.drains, relay = s.stats.relay, active = s.active,
+      }
+      state.consume(s, {
+        { kind = "impact", board = "a", what = "bumper", x = 1, y = 2, impulse = 99 },
+        { kind = "impact", board = "a", what = "wall",   x = 3, y = 4, impulse = 0.4 },
+      })
+      A.equal(before.phase,  s.phase)
+      A.equal(before.active, s.active)
+      A.equal(before.passes, s.stats.passes)
+      A.equal(before.drains, s.stats.drains)
+      A.equal(before.relay,  s.stats.relay)
+    end)
+  end)
+
 end
