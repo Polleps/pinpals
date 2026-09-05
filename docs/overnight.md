@@ -101,7 +101,7 @@ meaningfully above 0 that still makes the guard a real trade. Measure both.
 ~60% is measured off a static, perfectly timed flip, which is not the game. Measure
 from realistic incoming trajectories, then tune.
 
-### 10. Playtest capture so tomorrow produces data  ·  TODO
+### 10. Playtest capture so tomorrow produces data  ·  DONE (395d370)
 
 §5.1 gets recording free from the intent stream. A session that writes intents + stats
 turns Polle's morning play into a measurement instead of an impression.
@@ -460,5 +460,38 @@ by measurement. Filed as item 14.
 Also: the cross-board link validator from iteration 7 caught my bumpers-removed
 experiment before it ran, refusing a board set where Glasshouse lights a cluster
 Foundry no longer has. Nice to have that confirmed by accident.
+
+### Iteration 10 — a session now produces numbers · `395d370`
+
+Quitting writes a log and prints the path. Play, quit, paste the summary — that turns
+an impression into something checkable:
+
+```
+score 75500    best single rally was worth 28000
+passes 3 (1.0/min)   drains 13 (4.3/min)   longest rally 1 crossings
+
+rally length, 13 completed rallies:
+  mean 0.2   median 0   p90 1   max 1
+  10 of 13 rallies (77%) ended without a single pass
+
+operator duty cycle (share of that board's active time):
+  board a: gate  48%   post  56%
+```
+
+*(that sample is random input, not play — it shows the shape of the output)*
+
+Two lines are chosen to catch specific failures rather than to be interesting.
+**"Rallies that ended without a single pass"** is the number that would say the
+prototype has failed outright — if most balls die before a crossing there is no rally
+to have a feel about. **Operator duty cycle** is pillar 1 as an instrument: an operator
+near 0% is what "waiting" looks like as a number.
+
+Every drain records the rally it ended and whether the post was up, so "we lost it on
+the fourth pass with the post down" becomes checkable. The tick-stamped intent stream
+follows, which is what makes a session replayable later (§5.1).
+
+Verified by generating a real log from simulated play and reading it, rather than
+waiting for a human to produce one — a capture nobody has looked at is a capture nobody
+knows is broken.
 
 *(iterations append here)*
