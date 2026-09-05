@@ -34,6 +34,14 @@ local THEME = {
 
 local fonts
 
+-- Injected by main.lua rather than required, so the renderer still draws with
+-- no effects attached -- which is what `--shot` does, and what makes a "did fx
+-- break this?" bisect one line long.
+local fx
+
+---@param module table app.fx
+function M.attach_fx(module) fx = module end
+
 function M.load(defs)
   fonts = {
     small = love.graphics.newFont(11),
@@ -50,6 +58,13 @@ end
 M.size = { w = W, h = H }
 
 local function lerp(a, b, t) return a + (b - a) * t end
+
+--- §9: relay heat, 0..1. The rally gets visibly hotter as it gets more
+--- valuable and more likely to end, which is the whole risk curve made
+--- visible. Saturates at 10 crossings so a long rally still has a ceiling.
+local function heat_of(state)
+  return math.min(1, (state.stats.relay or 0) / 10)
+end
 
 --- Interpolate a value between the two most recent sim states (§4.1).
 local function ilerp(prev, cur, alpha) return prev and cur and lerp(prev, cur, alpha) or cur end
@@ -84,7 +99,7 @@ end
 -- Board
 ---------------------------------------------------------------------------
 
-local function draw_board(def, snap, prev, alpha, view, active, _state)
+local function draw_board(def, snap, prev, alpha, view, active, heat)
   local th = THEME[def.id]
   local dim = active and 1.0 or 0.45
 
@@ -109,12 +124,18 @@ local function draw_board(def, snap, prev, alpha, view, active, _state)
   love.graphics.setLineWidth(3)
   for _, poly in ipairs(def.walls) do love.graphics.line(poly) end
 
-  -- Bumpers
-  for _, b in ipairs(def.bumpers or {}) do
-    love.graphics.setColor(0.95 * dim, 0.85 * dim, 0.30 * dim, 0.85)
-    love.graphics.circle("line", b.x, b.y, b.r)
-    love.graphics.setColor(0.95 * dim, 0.85 * dim, 0.30 * dim, 0.18)
-    love.graphics.circle("fill", b.x, b.y, b.r)
+  -- Bumpers. A struck bumper lights and swells for ~300ms: they are board A's
+  -- declared character (prototype.md §4.1) and were previously indistinguishable
+  -- from scenery whether or not the ball had just hit them.
+  for i, b in ipairs(def.bumpers or {}) do
+    local pulse = fx and fx.bumper_pulse(def.id, i) or 0
+    local r = b.r * (1 + 0.18 * pulse)
+    love.graphics.setColor(0.95 * dim, 0.85 * dim, 0.30 * dim, 0.85 + 0.15 * pulse)
+    love.graphics.setLineWidth(2 + 3 * pulse)
+    love.graphics.circle("line", b.x, b.y, r)
+    love.graphics.setColor(0.95 * dim, 0.85 * dim, 0.30 * dim, 0.18 + 0.62 * pulse)
+    love.graphics.circle("fill", b.x, b.y, r)
+    love.graphics.setLineWidth(3)
   end
 
   -- Tube mouth and arrival point (§5: the link, always visible)
@@ -160,13 +181,17 @@ local function draw_board(def, snap, prev, alpha, view, active, _state)
     love.graphics.circle("fill", f.x, f.y, C.FLIPPER_THICK * 0.62)
   end
 
-  -- Ball
+  -- Effects sit under the ball and over the geometry, in board space.
+  if fx then fx.draw_board(def.id, heat) end
+
+  -- Ball. Its halo takes the rally heat: at rally 0 it is a plain white ball,
+  -- and by rally 10 it is visibly running hot (§9).
   if snap.ball then
     local bx = ilerp(prev and prev.ball and prev.ball.x, snap.ball.x, alpha)
     local by = ilerp(prev and prev.ball and prev.ball.y, snap.ball.y, alpha)
-    love.graphics.setColor(1, 1, 1, 0.25)
-    love.graphics.circle("fill", bx, by, C.BALL_RADIUS * 2.1)
-    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.setColor(1, 0.95 - 0.35 * heat, 0.85 - 0.65 * heat, 0.25 + 0.22 * heat)
+    love.graphics.circle("fill", bx, by, C.BALL_RADIUS * (2.1 + 0.9 * heat))
+    love.graphics.setColor(1, 1 - 0.10 * heat, 1 - 0.22 * heat, 1)
     love.graphics.circle("fill", bx, by, C.BALL_RADIUS)
   end
 
@@ -317,14 +342,23 @@ end
 function M.draw(match, legend, debug_on)
   love.graphics.clear(0.045, 0.045, 0.058)
   local state = match.state
+  local heat  = heat_of(state)
+
+  -- One shake for the whole frame, including the HUD: shaking the boards but
+  -- not the panel next to them reads as a rendering fault rather than impact.
+  local sx, sy = 0, 0
+  if fx then sx, sy = fx.shake_offset() end
+  love.graphics.push()
+  love.graphics.translate(sx, sy)
   for _, id in ipairs({ "a", "b" }) do
     draw_board(match.defs[id], match.cur[id], match.prev[id], match.alpha,
-               M.view[id], id == state.active, state)
+               M.view[id], id == state.active, heat)
   end
   if state.phase == "transit" then draw_transit(state, match.defs) end
   HA = M.hud_a
   if HA > 0.02 then draw_hud(state, match.defs, match.cur, legend) end
   HA = 1
+  love.graphics.pop()
 
   if debug_on then
     love.graphics.setFont(fonts.small)

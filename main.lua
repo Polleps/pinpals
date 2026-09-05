@@ -14,7 +14,7 @@ for i, v in ipairs(arg or {}) do
   if v == "--pass" then shot_open = true; shot_pass = true end
 end
 
-local match, render, input, audio, boards
+local match, render, input, audio, fx, boards
 local debug_on = false
 local shot_done = false
 
@@ -33,8 +33,21 @@ function love.load()
   render = require("app.render")
   input  = require("app.input")
   audio  = require("app.audio")
+  fx     = require("app.fx")
   render.load(boards)
+  render.attach_fx(fx)
   audio.load()          -- no-ops if the audio modules are off (--shot, --test)
+
+  -- §7's visual check is only worth anything if what it captures is what the
+  -- player sees. fx state exists only because something advanced it, so the
+  -- shot path drives it exactly as love.update does -- otherwise every
+  -- screenshot shows a game with no trail, no sparks and no lit bumpers.
+  local function run_with_fx(n)
+    for _ = 1, n do
+      match:run(1)
+      fx.update(match, match:drain_events(), C.FIXED_DT)
+    end
+  end
 
   if mode == "shot" then
     -- Stand in for an operator holding the gate open, so a screenshot can
@@ -45,12 +58,12 @@ function love.load()
     -- --pass puts the ball up the ramp on cue, so the transit and the
     -- handed-over camera can both be captured deterministically.
     if shot_pass then
-      match:run(200)
+      run_with_fx(200)
       match.boards[match.state.active]:spawn(
         boards[match.state.active].tube.mouth.x, 520, 0, -C.SERVE_SPEED)
-      match:run(math.max(0, shot_ticks - 200))
+      run_with_fx(math.max(0, shot_ticks - 200))
     else
-      match:run(shot_ticks)
+      run_with_fx(shot_ticks)
     end
     return
   end
@@ -61,7 +74,11 @@ end
 function love.update(dt)
   if mode ~= "play" then return end
   match:advance(dt)
-  audio.update(match)
+  -- Drained once and shared: audio and fx must see the same events, and
+  -- whichever called drain_events() second would otherwise see none.
+  local events = match:drain_events()
+  audio.update(match, events)
+  fx.update(match, events, dt)
   render.update_camera(match.state, boards, dt)
 end
 
@@ -94,7 +111,11 @@ function love.keypressed(key)
   if mode ~= "play" then return end
   if key == "escape" then love.event.quit() return end
   if key == "f1" then debug_on = not debug_on return end
-  if key == "r" then match = require("sim.match").new(boards) return end
+  if key == "r" then
+    match = require("sim.match").new(boards)
+    fx.reset()
+    return
+  end
   local it = input.from_key(key, true, match.state.tick)
   if it then match:push(it) end
 end

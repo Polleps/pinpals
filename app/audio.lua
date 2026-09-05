@@ -269,11 +269,15 @@ local function device_edges(s)
 end
 
 --- The whole audio surface: one call per frame from main.lua.
+--- The event list is drained once by the caller and shared with app/fx.lua,
+--- so a hit sounds and looks like one hit rather than two systems each
+--- draining half the feed.
 ---@param match table sim.match
-function A.update(match)
+---@param events table[] this frame's events
+function A.update(match, events)
   if not available then return end
   local s = match.state
-  A.consume(match:drain_events(), s)
+  A.consume(events, s)
   phase_edges(s, heat_of(s))
   device_edges(s)
 end
