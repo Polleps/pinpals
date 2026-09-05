@@ -60,7 +60,7 @@ Bumper pop, flipper contact flash, ball trail scaled to speed, screenshake on dr
 device travel telegraphed rather than snapping. All in `app/render.lua`; the sim must
 not learn about any of it. Guard: `make shot` still renders, `check_layers.sh` clean.
 
-### 3. Tube transit gets its beat  ·  TODO
+### 3. Tube transit gets its beat  ·  DONE (6934eec)
 
 §10 wants the camera to pull out and show the ball crossing between both boards. Right
 now it is ~800ms of dead air. This is the game's signature moment and it currently
@@ -174,5 +174,34 @@ visual gate quietly useless for exactly the thing it was added to check.
 The seven new tests were each verified against the bug they claim to catch: removing
 the ring cap, the trail retraction, the shake decay or the shake clamp fails exactly
 one test apiece and no others.
+
+### Iteration 3 — the transit beat · `6934eec`
+
+The dead air was not the camera. `render.lua` faded the HUD to zero for the whole
+800ms, and the comment said why: the pulled-back boards supposedly reached into its
+column. They do not — measured:
+
+| | board A ends | board B starts | room for HUD |
+|---|---|---|---|
+| normal play | 381.1 | 618.9 | 213.8px |
+| transit | 292.8 | 707.2 | **390.4px** |
+
+Pulling the boards back makes *more* room. The fade bought nothing and cost the
+entire beat: `prototype.md` §4.5 hands the sender the destination board's devices
+for exactly those 800ms, so the operator's panel was hidden during the one window in
+which its owner is the operator. A pillar-1 violation ("nobody waits") wearing a
+camera move as a disguise.
+
+The HUD already keyed off `state.active`, so it had been showing the correct board
+all along — it just could not be seen. Now relabelled for the moment: **PREPARING**
+rather than ON, **RECEIVING** rather than FLIPPER.
+
+Added on top: incoming rings collapsing onto the entry point, a brightening wake
+along the travelled arc, and a transit progress bar.
+
+Worth noting for the morning: **two of the four bugs in this iteration were only
+findable by looking at the render** — a fixed pixel offset printed the countdown
+through the word "GLASSHOUSE", and the progress bar landed on the controls hint. The
+gates were green through both. `--shot` is doing real work now that it draws fx.
 
 *(iterations append here)*
