@@ -80,6 +80,21 @@ function Match:_tick()
 
   core.consume(s, events)
 
+  -- A score award is a rule outcome, but app/ wants to float the number where
+  -- it happened. Routed through the feed rather than polled off the state,
+  -- because several fixed steps run per rendered frame and a poll would see
+  -- only the last one -- a hot rally would silently drop most of its awards.
+  local aw = s.last_award
+  if aw then
+    local def = self.defs[aw.board]
+    self:_feed({
+      kind = "award", board = aw.board, value = aw.value, what = aw.kind,
+      -- A pass has no contact point: it is awarded for the crossing itself,
+      -- so it floats where the ball is about to land.
+      x = aw.x or def.entry.x, y = aw.y or def.entry.y,
+    })
+  end
+
   if s.phase == "transit" and s.transit then
     self.boards[s.transit.from]:despawn()
   elseif s.phase == "drain" then

@@ -193,6 +193,23 @@ function Board:_begin(fa, fb, _)
   if a.kind == "ball" then other = b elseif b.kind == "ball" then other = a else return end
   if other.kind == "mouth" then
     self.events[#self.events+1] = { kind = "tube", board = self.id, speed = self:ball_speed() }
+
+  elseif other.kind == "bumper" then
+    -- A scoring hit, which is a rule and not a contact: it goes to core/,
+    -- where the presentation `impact` below deliberately does not.
+    --
+    -- No debounce here, and that is a measured decision rather than an
+    -- oversight. The worry was that a ball leaving a bumper with restitution
+    -- > 1 would register several begin-contacts on the way out and score for
+    -- each. tests/probe_scoring.lua says it does not: a 0.02s cooldown
+    -- suppresses exactly as many repeats as no cooldown at all (21 of 120
+    -- approaches either way), so there is no solver jitter to filter. The
+    -- repeats that do exist are spread over 50-400ms -- the ball genuinely
+    -- coming back for a second hit, which is a thing pinball rewards.
+    local hit = self.def.bumpers[other.id]
+    self.events[#self.events+1] = {
+      kind = "bumper", board = self.id, index = other.id, x = hit.x, y = hit.y,
+    }
   end
 end
 

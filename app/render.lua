@@ -4,6 +4,7 @@
 
 local C       = require("core.constants")
 local intents = require("core.intents")
+local score   = require("core.score")
 
 local M = {}
 
@@ -40,7 +41,12 @@ local fonts
 local fx
 
 ---@param module table app.fx
-function M.attach_fx(module) fx = module end
+function M.attach_fx(module)
+  fx = module
+  -- render owns every font in the game; fx borrows one rather than creating
+  -- its own, which is what keeps fx loadable in the bare interpreter.
+  if fonts then fx.set_font(fonts.body) end
+end
 
 function M.load(defs)
   fonts = {
@@ -53,11 +59,21 @@ function M.load(defs)
   M.hud_a = 1
   for id, v in pairs(M.view) do v.x, v.y = place(id, v.s, defs[id].size.w) end
   M.hud_x = LEFT_X + defs.a.size.w * M.view.a.s + 24
+  if fx then fx.set_font(fonts.body) end
 end
 
 M.size = { w = W, h = H }
 
 local function lerp(a, b, t) return a + (b - a) * t end
+
+--- 1234500 -> "1,234,500". Pinball scores are large by design and a bare run
+--- of digits cannot be read at a glance from across a room.
+local function commas(n)
+  local out = tostring(math.floor(n))
+  local k
+  repeat out, k = out:gsub("^(-?%d+)(%d%d%d)", "%1,%2") until k == 0
+  return out
+end
 
 --- §9: relay heat, 0..1. The rally gets visibly hotter as it gets more
 --- valuable and more likely to end, which is the whole risk curve made
@@ -386,17 +402,41 @@ local function draw_hud(state, defs, snaps, legend)
   end
 
   -- The prototype's instrument panel (§14: does the rally feel good?).
-  y = y + 6
-  col(1, 1, 1, 0.5)
-  love.graphics.setFont(fonts.small)
-  love.graphics.print("RALLY", x, y)
-  love.graphics.setFont(fonts.huge)
-  col(0.55, 0.95, 0.7, 1)
-  love.graphics.print(tostring(state.stats.relay), x + 60, y - 12)
-  love.graphics.setFont(fonts.small)
+  -- The multiplier is the biggest thing on it on purpose: §9 puts the entire
+  -- risk curve on relay heat, so it is the one number both players are
+  -- deciding against every time they choose whether to pass.
+  local st   = state.stats
+  local heat = score.heat(st.relay)
+  local hot  = math.min(1, (heat - 1) / (C.HEAT_MAX - 1))
+
+  y = y + 8
   col(1, 1, 1, 0.45)
-  love.graphics.print(("best %d   passes %d   drains %d")
-    :format(state.stats.best_relay, state.stats.passes, state.stats.drains), x + 120, y + 2)
+  love.graphics.setFont(fonts.small)
+  love.graphics.print("SCORE", x, y)
+  love.graphics.setFont(fonts.head)
+  col(1, 1, 1, 0.92)
+  love.graphics.print(commas(st.score), x + 60, y - 6)
+  y = y + 30
+
+  col(1, 1, 1, 0.45)
+  love.graphics.setFont(fonts.small)
+  love.graphics.print("RALLY", x, y + 12)
+  love.graphics.setFont(fonts.huge)
+  -- Green when cold, amber-hot as the multiplier climbs.
+  col(lerp(0.55, 1.0, hot), lerp(0.95, 0.66, hot), lerp(0.70, 0.20, hot), 1)
+  love.graphics.print(("x%d"):format(heat), x + 60, y)
+  love.graphics.setFont(fonts.small)
+  col(1, 1, 1, 0.5)
+  love.graphics.print(("%d crossing%s"):format(st.relay, st.relay == 1 and "" or "s"),
+                      x + 130, y + 6)
+  col(1, 1, 1, 0.42)
+  love.graphics.print(("worth %s   best rally %s")
+    :format(commas(st.rally_score), commas(st.best_rally_score)), x + 130, y + 22)
+  y = y + 48
+
+  col(1, 1, 1, 0.35)
+  love.graphics.print(("best run %d crossings    passes %d    drains %d")
+    :format(st.best_relay, st.passes, st.drains), x, y)
 
   -- Phase banner
   if state.phase == "serve" or state.phase == "drain" then

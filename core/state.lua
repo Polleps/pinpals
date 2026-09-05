@@ -7,6 +7,7 @@
 
 local C       = require("core.constants")
 local intents = require("core.intents")
+local score   = require("core.score")
 
 local M = {}
 
@@ -26,7 +27,13 @@ function M.new(boards)
     -- Not scoring (§14 puts scoring out of scope). These are the instruments
     -- for the one question the prototype exists to answer: does the rally
     -- feel good? Relay length is the readout.
-    stats = { passes = 0, drains = 0, relay = 0, best_relay = 0 },
+    stats = {
+      passes = 0, drains = 0, relay = 0, best_relay = 0,
+      -- §9. `score` is the session record; `rally_score` is what the current
+      -- rally has been worth and dies with it, so `best_rally_score` is the
+      -- one that says how good these two got together.
+      score = 0, rally_score = 0, best_rally_score = 0,
+    },
   }
   for id, def in pairs(boards) do
     local b = { id = id, flippers = { left = false, right = false }, devices = {} }
@@ -86,6 +93,9 @@ function M.update(s)
   local dt = C.FIXED_DT
   s.tick = s.tick + 1
   s.time = s.time + dt
+  -- One-frame signal for app/: what was just scored and where. Cleared here
+  -- rather than by the reader, so nothing depends on someone remembering to.
+  s.last_award = nil
   local cmds = {}
 
   if s.phase == "serve" then
@@ -125,7 +135,12 @@ function M.consume(s, events)
       local to   = OTHER[from]
       -- §5: the pass carries state. Exit speed survives the trip, clamped so a
       -- desperate flail still arrives fast and a dribble still arrives moving.
-      local speed = math.max(C.TRANSIT_MIN_SP, math.min(C.TRANSIT_MAX_SP, ev.speed))
+      -- §9 "worth more, and moving faster": heat scales the arrival before
+      -- the clamp, so a hot rally lands harder and is genuinely harder to
+      -- hold. The clamp still has the last word, so this can never outrun the
+      -- ball's own ceiling or the tunneling budget behind it.
+      local scaled = ev.speed * score.speed_scale(s.stats.relay)
+      local speed = math.max(C.TRANSIT_MIN_SP, math.min(C.TRANSIT_MAX_SP, scaled))
       release_flippers(s)
       s.phase   = "transit"
       s.transit = { from = from, to = to, t = 0, duration = C.TRANSIT_TIME, speed = speed }
@@ -136,6 +151,16 @@ function M.consume(s, events)
       s.stats.passes = s.stats.passes + 1
       s.stats.relay  = s.stats.relay + 1
       if s.stats.relay > s.stats.best_relay then s.stats.best_relay = s.stats.relay end
+      -- Awarded at the NEW heat: the crossing that makes the rally hotter is
+      -- itself worth the hotter rate, so the escalation is visible on the
+      -- pass that earned it rather than one pass late.
+      s.last_award = { kind = "pass", value = score.award(s.stats, "pass"), board = to }
+
+    elseif ev.kind == "bumper" and s.phase == "play" then
+      s.last_award = {
+        kind = "bumper", value = score.award(s.stats, "bumper"),
+        board = ev.board, x = ev.x, y = ev.y,
+      }
 
     elseif ev.kind == "drain" and s.phase == "play" then
       release_flippers(s)
@@ -143,6 +168,7 @@ function M.consume(s, events)
       s.timer = C.DRAIN_DELAY
       s.stats.drains = s.stats.drains + 1
       s.stats.relay  = 0
+      score.end_rally(s.stats)
     end
   end
 end

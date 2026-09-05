@@ -406,6 +406,39 @@ return function(H)
   end)
 
   ---------------------------------------------------------------------------
+  -- Bumper scoring. A rule, not a contact: unlike `impact`, this one is meant
+  -- to reach core/.
+  ---------------------------------------------------------------------------
+
+  describe("bumper scoring events", function()
+    it("reports the bumper that was hit, by index", function()
+      local def = boards.a
+      local b   = Board.new(def)
+      local target = 2
+      local t = def.bumpers[target]
+      -- Fired from directly above, so which bumper is struck is not in doubt.
+      b:spawn(t.x, t.y - t.r - C.BALL_RADIUS - 8, 0, 700)
+      local seen = {}
+      run(b, 0.6, cmd(), seen)
+      local found
+      for _, ev in ipairs(seen) do
+        if ev.kind == "bumper" then found = found or ev.index end
+      end
+      A.equal(target, found, "the wrong bumper scored, or none did")
+    end)
+
+    it("does not score a bumper the ball never touched", function()
+      local b = Board.new(boards.a)
+      b:spawn(340, 300, 0, 0)          -- right side, clear of the cluster
+      local seen = {}
+      run(b, 0.4, cmd(), seen)
+      for _, ev in ipairs(seen) do
+        A.truthy(ev.kind ~= "bumper", "a bumper scored with no ball near it")
+      end
+    end)
+  end)
+
+  ---------------------------------------------------------------------------
   -- Impact events. Presentation only, but they are a contract app/ relies on
   -- and the threshold behind them is the difference between a set of hits and
   -- a 240 Hz buzz.

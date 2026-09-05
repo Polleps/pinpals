@@ -15,8 +15,11 @@ local FX = {}
 
 -- Caps. A frame can produce a burst of contacts and nothing culls on its own.
 local MAX_RINGS, MAX_SPARKS, TRAIL_LEN = 48, 160, 22
+local MAX_AWARDS = 24
 
 local rings, sparks, shake = {}, {}, { amp = 0 }
+local awards = {}                     -- floating score numbers
+local award_font
 local trail  = { a = {}, b = {} }
 local pulses = { a = {}, b = {} }     -- bumper index -> remaining seconds
 
@@ -59,6 +62,17 @@ local function add_sparks(board, x, y, n, speed, r, g, b)
       cr = r, cg = g, cb = b,
     }
   end
+end
+
+--- A score, floating up from where it was earned. §9's whole point is that
+--- the same shot is worth more later, and a number that only ever appears in
+--- the corner of the HUD cannot show that -- you have to see 50 become 500 at
+--- the bumper you just hit.
+local function add_award(board, x, y, value)
+  if #awards >= MAX_AWARDS then table.remove(awards, 1) end
+  awards[#awards+1] = {
+    board = board, x = x, y = y, value = value, t = 0, life = 1.15,
+  }
 end
 
 --- Screen shake. Deliberately small and rare: a pinball cabinet does not
@@ -175,10 +189,13 @@ function FX.update(match, events, dt)
       add_sparks(ev.board, def.size.w / 2, def.drain_y, 26, 240, 1.0, 0.35, 0.30)
     elseif ev.kind == "tube" then
       add_shake(2.2)
+    elseif ev.kind == "award" then
+      add_award(ev.board, ev.x, ev.y, ev.value)
     end
   end
 
   advance_list(rings, dt, nil)
+  advance_list(awards, dt, function(e, d) e.y = e.y - 26 * d end)
   advance_list(sparks, dt, move_spark)
   advance_pulses(dt)
   sample_trail(match)
@@ -187,20 +204,25 @@ function FX.update(match, events, dt)
   if shake.amp < 0.05 then shake.amp = 0 end
 end
 
+--- The font for floating scores. Injected by render.lua, which owns every
+--- font in the game, so fx never creates a graphics resource of its own and
+--- stays loadable in the bare interpreter.
+function FX.set_font(f) award_font = f end
+
 --- Counts, for tests and the F1 readout. The caps above exist so a long
 --- session cannot grow these without bound, and a cap nobody can observe is a
 --- cap nobody can test.
 ---@return table
 function FX.stats()
   return {
-    rings = #rings, sparks = #sparks,
+    rings = #rings, sparks = #sparks, awards = #awards,
     trail_a = #trail.a, trail_b = #trail.b,
     shake = shake.amp,
   }
 end
 
 function FX.reset()
-  rings, sparks = {}, {}
+  rings, sparks, awards = {}, {}, {}
   trail  = { a = {}, b = {} }
   pulses = { a = {}, b = {} }
   shake.amp = 0
@@ -254,6 +276,22 @@ function FX.draw_board(board_id, heat)
       lg.setColor(e.cr, e.cg, e.cb, (1 - u) * 0.9)
       lg.circle("fill", e.x, e.y, 1.6 * (1 - u) + 0.5)
     end
+  end
+
+  if award_font then
+    local prev = lg.getFont()
+    lg.setFont(award_font)
+    for _, e in ipairs(awards) do
+      if e.board == board_id then
+        local u = e.t / e.life
+        local text = tostring(e.value)
+        -- Fades late rather than linearly, so the number is readable for most
+        -- of its life instead of being half-transparent the whole way up.
+        lg.setColor(1, 0.95, 0.6, math.min(1, 2.4 * (1 - u)))
+        lg.print(text, e.x - award_font:getWidth(text) / 2, e.y)
+      end
+    end
+    lg.setFont(prev)
   end
 end
 

@@ -208,4 +208,134 @@ return function(H)
     end)
   end)
 
+  ---------------------------------------------------------------------------
+  -- §9 Scoring. The multiplier lives on passing, not on shots.
+  ---------------------------------------------------------------------------
+  describe("relay heat", function()
+    local score = require("core.score")
+
+    it("is the crossing count, floored at x1", function()
+      A.equal(1, score.heat(0), "a fresh ball must still score")
+      A.equal(1, score.heat(1), "the first pass of a life is base rate")
+      A.equal(5, score.heat(5))
+    end)
+
+    it("has a ceiling", function()
+      -- Without one, a long rally makes every earlier rally unreadable and
+      -- the multiplier stops being a number anyone can hold in their head.
+      A.equal(C.HEAT_MAX, score.heat(C.HEAT_MAX + 40))
+    end)
+
+    it("scales arrival speed far more gently than score", function()
+      -- Score can escalate wildly and cost nothing. Arrival speed is a
+      -- difficulty knob AND a tunneling risk, so the two curves are separate
+      -- on purpose and this is the assertion that keeps them separate.
+      A.equal(1, score.speed_scale(0))
+      A.truthy(score.speed_scale(4) < 1.25, "speed ramps as fast as score")
+      A.equal(C.HEAT_SPEED_MAX, score.speed_scale(999))
+    end)
+  end)
+
+  describe("scoring", function()
+    local score = require("core.score")
+
+    local function fresh()
+      return { relay = 0, score = 0, rally_score = 0, best_rally_score = 0 }
+    end
+
+    it("pays the current multiplier", function()
+      local st = fresh()
+      st.relay = 3
+      A.equal(C.SCORE_PASS * 3, score.award(st, "pass"))
+      A.equal(C.SCORE_PASS * 3, st.score)
+    end)
+
+    it("keeps the session total but drops the rally on a drain", function()
+      local st = fresh()
+      st.relay = 2
+      score.award(st, "pass")
+      local banked = st.score
+      A.equal(banked, st.rally_score)
+      score.end_rally(st)
+      A.equal(banked, st.score,            "a drain took the session score")
+      A.equal(0,      st.rally_score,      "the rally survived its own drain")
+      A.equal(banked, st.best_rally_score, "best rally was not remembered")
+    end)
+
+    it("makes one long rally worth far more than the same passes scattered",
+       function()
+      -- This is §9 itself, as a test: "the rally becomes simultaneously more
+      -- valuable and more likely to end". If these two ever come out equal,
+      -- the multiplier has stopped doing the only job it has.
+      local together = fresh()
+      for _ = 1, 5 do
+        together.relay = together.relay + 1
+        score.award(together, "pass")
+      end
+      local scattered = fresh()
+      for _ = 1, 5 do
+        scattered.relay = 1
+        score.award(scattered, "pass")
+        scattered.relay = 0
+        score.end_rally(scattered)
+      end
+      -- Measured: 15,000 together against 5,000 scattered at five crossings,
+      -- and the gap widens with length (45,000 vs 9,000 at nine).
+      A.truthy(together.score >= scattered.score * 3,
+               ("a 5-rally paid %d against %d scattered -- the curve is flat")
+                 :format(together.score, scattered.score))
+    end)
+  end)
+
+  describe("scoring through the match rules", function()
+    local score = require("core.score")
+
+    it("awards a pass at the heat the crossing just created", function()
+      -- Awarding at the OLD heat pays the escalation one pass late, which
+      -- makes the readout disagree with the number that floats up.
+      local s = state.new(boards)
+      s.phase = "play"
+      state.consume(s, { { kind = "tube", board = "a", speed = 1200 } })
+      A.equal(1, s.stats.relay)
+      A.equal(C.SCORE_PASS * score.heat(1), s.stats.score)
+      A.equal(C.SCORE_PASS * score.heat(1), s.last_award.value)
+    end)
+
+    it("sends the ball on faster as the rally heats up", function()
+      local cold = state.new(boards)
+      cold.phase = "play"
+      state.consume(cold, { { kind = "tube", board = "a", speed = 1200 } })
+
+      local hot = state.new(boards)
+      hot.phase = "play"
+      hot.stats.relay = 8
+      state.consume(hot, { { kind = "tube", board = "a", speed = 1200 } })
+
+      A.truthy(hot.transit.speed > cold.transit.speed,
+               "heat did not reach the ball (§9: worth more AND moving faster)")
+      A.truthy(hot.transit.speed <= C.TRANSIT_MAX_SP, "heat outran the clamp")
+    end)
+
+    it("takes the rally, not the session, when the ball drains", function()
+      local s = state.new(boards)
+      s.phase = "play"
+      state.consume(s, { { kind = "tube", board = "a", speed = 1200 } })
+      local banked = s.stats.score
+      s.phase = "play"
+      state.consume(s, { { kind = "drain", board = "b" } })
+      A.equal(0,      s.stats.relay)
+      A.equal(0,      s.stats.rally_score)
+      A.equal(banked, s.stats.score)
+      A.equal(banked, s.stats.best_rally_score)
+    end)
+
+    it("scores a bumper on the board that reported it", function()
+      local s = state.new(boards)
+      s.phase = "play"
+      state.consume(s, { { kind = "bumper", board = "a", index = 1, x = 95, y = 250 } })
+      A.equal(C.SCORE_BUMPER * score.heat(0), s.stats.score)
+      A.equal("bumper", s.last_award.kind)
+    end)
+  end)
+
 end

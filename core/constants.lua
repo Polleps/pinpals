@@ -50,7 +50,32 @@ C.FLIPPER_UP     = -0.36             -- rad above horizontal, when flipped
 -- §5 The link ----------------------------------------------------------------
 C.TRANSIT_TIME   = 0.80        -- seconds in the tube (latency budget, §6)
 C.TRANSIT_MIN_SP = 12 * C.METER
-C.TRANSIT_MAX_SP = 40 * C.METER
+-- Pinned to the ball's own ceiling rather than set independently. At 40 m/s
+-- the top 384 px/s of this clamp was dead range: sim/ clamps the ball to
+-- BALL_MAX_SPEED on the very next step, so an arrival could never actually
+-- reach it and the constant quietly lied about the range.
+C.TRANSIT_MAX_SP = C.BALL_MAX_SPEED
+
+-- §9 Scoring: the multiplier lives on passing, not on shots ------------------
+-- Heat is earned only by crossing the tube, and then multiplies everything.
+-- That is what makes a rally simultaneously more valuable and more likely to
+-- end -- a risk curve generated entirely by cooperation, with no timer and no
+-- difficulty setting behind it.
+C.HEAT_MAX       = 10          -- x10 ceiling, so a long rally still has a top
+C.SCORE_PASS     = 1000        -- awarded per crossing, at the new heat
+C.SCORE_BUMPER   = 50          -- the only shot content that exists yet
+-- There is deliberately no bumper cooldown constant. One was written, then
+-- measured away: see the note in sim/board.lua:_begin and the numbers in
+-- tests/probe_scoring.lua.
+
+-- §9 "worth more, AND MOVING FASTER". Heat raises the speed the ball arrives
+-- at, so the rally gets physically harder to hold as it gets valuable.
+--
+-- Deliberately NOT done by shortening transit: §5 and §11 make that 800ms the
+-- online latency budget, so spending it on escalation would foreclose network
+-- play to buy something a speed multiplier already gives us.
+C.HEAT_SPEED_STEP = 0.05       -- +5% arrival speed per crossing
+C.HEAT_SPEED_MAX  = 1.55       -- ceiling on that multiplier
 
 -- Match flow -----------------------------------------------------------------
 C.SERVE_SPEED    = 1050        -- px/s off the plunger; enough to reach the gate
