@@ -306,25 +306,73 @@ return function(H)
         ("the cluster is barely live: %.2f hits/s"):format(total / 120))
     end)
 
-    it("but not while the post is up -- the device is a real trade (§6.2)", function()
-      -- If raising the post cost nothing, the operator would just hold it up
-      -- forever and there would be no conversation to have. Measured: the
-      -- pass goes from ~60% to 0% while the post is raised.
-      local def = boards.a
-      local made = 0
-      for k = 0.25, 0.90, 0.09 do
-        local b = Board.new(def)
-        run(b, 0.45, cmd(true, true))                 -- gate open AND post up
-        b:spawn(on_flipper(def.flippers[2].x, "right", k))
-        run(b, 12 * C.FIXED_DT, cmd(true, true))
-        local c = cmd(true, true, false, true)
-        for _ = 1, math.floor(3.5 * C.TICK_HZ) do
-          for _, ev in ipairs(b:step(c, true)) do
-            if ev.kind == "tube" then made = made + 1 end
+    it("and the raised post makes it harder without making it impossible (§6.2)",
+       function()
+      -- Both halves matter, and the device previously failed both.
+      --
+      -- If raising the post cost nothing, the operator would hold it up
+      -- forever and there would be no conversation to have. But if it costs
+      -- EVERYTHING -- which it did, measuring 0% pass and 0% drains while
+      -- raised -- then the flipper player has nothing to do and nothing to
+      -- fear for as long as it is held, which is pillar 1 broken by a device
+      -- that looks like it is helping.
+      --
+      -- So this asserts a band, not a floor: the post must cost real pass
+      -- rate and must leave the shot on the table.
+      -- Both flippers, because the post's cost is sharply asymmetric and
+      -- sweeping one of them measures the wrong thing. Each board's ramp is
+      -- off-centre, so the post mainly blocks whichever flipper has to shoot
+      -- ACROSS the middle: on Foundry that is the left one (58% -> 25%, while
+      -- the right barely notices at 58% -> 54%), and on Glasshouse it is the
+      -- right (63% -> 8%). An earlier version of this test swept Foundry's
+      -- right flipper only and concluded the post cost nothing.
+      local function passes_with(post_up)
+        local def = boards.a
+        local made, tried = 0, 0
+        for fi, side in ipairs({ "left", "right" }) do
+          local spec = def.flippers[fi]
+          local sign = (side == "left") and 1 or -1
+          local ang  = (side == "left") and C.FLIPPER_REST or -C.FLIPPER_REST
+          for k = 0.25, 0.95, 0.05 do
+            local b = Board.new(def)
+            run(b, 0.45, cmd(true, post_up))          -- let the post finish travelling
+            -- Resting the ball ON the flipper, the way tests/probe_post.lua
+            -- does. The shared `on_flipper` helper starts it 15.9px clear
+            -- rather than 10.6px, which is enough for it to bounce before the
+            -- flip lands and washed the post's effect out entirely: the same
+            -- sweep measured 13/28 down against 14/28 up, versus 58% and 40%
+            -- from a ball actually sitting on the flipper. Worth knowing that
+            -- these two harnesses do not agree.
+            local d = C.FLIPPER_LEN * k
+            b:spawn(spec.x + math.cos(ang) * d * sign,
+                    spec.y + math.sin(ang) * d * sign - C.BALL_RADIUS - 2, 0, 0)
+            run(b, 12 * C.FIXED_DT, cmd(true, post_up))
+            local held = cmd(true, post_up, side == "left", side == "right")
+            local rest = cmd(true, post_up)
+            local c, got = held, false
+            for tick = 1, math.floor(3.5 * C.TICK_HZ) do
+              if tick == math.floor(0.22 * C.TICK_HZ) then c = rest end
+              for _, ev in ipairs(b:step(c, true)) do
+                if ev.kind == "tube" then got = true end
+              end
+              if got then break end
+            end
+            tried = tried + 1
+            if got then made = made + 1 end
           end
         end
+        return made, tried
       end
-      A.truthy(made <= 1, ("the raised post is not blocking anything: %d passes"):format(made))
+
+      local down, tried = passes_with(false)
+      local up = passes_with(true)
+      A.truthy(down > 0, "the pass is not makeable at all with the post down")
+      A.truthy(up < down,
+        ("the raised post costs nothing: %d/%d up vs %d/%d down")
+          :format(up, tried, down, tried))
+      A.truthy(up > 0,
+        ("the raised post is an absolute block again: %d/%d with it up, %d down")
+          :format(up, tried, down))
     end)
   end)
 

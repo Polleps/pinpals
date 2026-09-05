@@ -49,11 +49,21 @@ you keep the ball. Open, the ramp feeds the tube and the ball is your partner's
 problem. You cannot pass without your partner opening it for you.
 
 **Post** (~260ms) — rises from the floor between the flippers.
-Up, it guards the centre drain, which is the only drain on either board. Up, it
-also blocks the ramp shot completely — measured, not asserted: the pass goes from
-20/32 to **0/32** while the post is raised. So the operator cannot keep their
-partner safe and let them pass at the same time, ever. Both facts are locked in by
-tests.
+Up, it guards the centre drain, which is the only drain on either board — 100% of
+drop-ins stopped, against 68% getting through with it down.
+
+It used to sit at y=676, *above* the flipper pivots and directly in the launch path,
+where it measured 0% pass **and** 0% drains: not a trade but a pause button, with
+nothing to do and nothing to fear for as long as it was held. Lowered to y=713 it
+costs the pass without ending it — Foundry 58% → 40%, Glasshouse 69% → 31%.
+
+The cost is sharply asymmetric, which is the best thing about it. Each board's ramp
+is off-centre, so the post blocks whichever flipper must shoot *across* the middle:
+Foundry's left drops 58% → 25% while its right barely notices, and Glasshouse's right
+drops 63% → 8%. A raised post therefore does not stop the pass, it **moves** it — you
+have to work the ball to the near flipper — and the two boards are blocked on opposite
+sides, so the skill does not transfer. That fell out of the geometry rather than being
+designed, and is now deliberate.
 
 ## 3. What measuring changed
 

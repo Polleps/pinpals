@@ -144,10 +144,55 @@ return {
       id     = "post",
       kind   = "paddle",
       travel = 0.26,
-      up     = { x = 192, y = 676 },   -- extended: spans the drain gap
+      -- Lowered from y=676, which was ABOVE the flipper pivots at y=688 and
+      -- therefore sat directly in the launch path. Measured, the old post was
+      -- not a trade at all but a pause button: with it raised the pass rate
+      -- was 0% AND the drain rate was 0%. Nothing could happen in either
+      -- direction, which leaves the flipper player with nothing to do and
+      -- nothing to fear -- pillar 1 ("nobody waits") and §6.2 ("every
+      -- operator action is a trade") broken by the same 12 pixels.
+      --
+      -- At y=713 it sits below the pivots, where a draining ball still meets
+      -- it but a shot leaving the flipper mostly clears it:
+      --
+      --   post y    Foundry pass   Glasshouse pass   drains stopped
+      --      676              0%                0%             100%
+      --      711              8%               15%             100%
+      --      713             40%               31%             100%   <- here
+      --      715             73%               60%             100%
+      --      726             58%               69%             100%
+      --   (down)             58%               69%              32%
+      --
+      -- 726 is the opposite failure: a guard that costs nothing would simply
+      -- be held up forever. 713 keeps 69% of Foundry's pass rate and 45% of
+      -- Glasshouse's, so raising it is a decision rather than a reflex.
+      --
+      --
+      -- The cost is sharply ASYMMETRIC, and that is the best thing about the
+      -- device. Each board's ramp is off-centre, so the post mainly blocks
+      -- whichever flipper has to shoot ACROSS the middle:
+      --
+      --                    left flipper   right flipper
+      --   Foundry     down          58%             58%
+      --   Foundry     UP            25%             54%
+      --   Glasshouse  down          75%             63%
+      --   Glasshouse  UP            54%              8%
+      --
+      -- So a raised post does not stop the pass, it moves it: you have to get
+      -- the ball to the near flipper first. The flipper player has something
+      -- to do while their partner guards, which is what pillar 1 asks for,
+      -- and the two boards are blocked on opposite sides so the skill does
+      -- not transfer. None of this was designed -- it fell out of the ramps
+      -- being on opposite sides -- but it is worth keeping deliberately.
+      --
+      -- NOTE this is a steep slope -- roughly 16 percentage points of pass
+      -- rate per pixel between 711 and 715 -- because the post is a flat bar
+      -- and a shot either clears it or does not. Treat any edit to this
+      -- number as a redesign of the device and re-run tests/probe_post.lua.
+      up     = { x = 192, y = 713 },   -- extended: spans the drain gap
       down   = { x = 192, y = 790 },   -- retracted below the playfield
       w = 52, h = 12,
-      tradeoff = "Guards the centre drain, but blocks almost every shot.",
+      tradeoff = "Guards the centre drain; the pass gets much harder.",
       label_closed = "OPEN",
       label_open   = "GUARD",
     },
