@@ -5,6 +5,7 @@
 local C       = require("core.constants")
 local intents = require("core.intents")
 local score   = require("core.score")
+local geo     = require("core.geometry")
 
 local M = {}
 
@@ -153,7 +154,7 @@ local function draw_incoming(def, u)
   lg.circle("fill", e.x, e.y, 4 + 3 * u)
 end
 
-local function draw_board(def, snap, prev, alpha, view, active, heat, incoming)
+local function draw_board(def, snap, prev, alpha, view, active, heat, incoming, tstates)
   local th = THEME[def.id]
   local dim = active and 1.0 or 0.45
 
@@ -182,7 +183,7 @@ local function draw_board(def, snap, prev, alpha, view, active, heat, incoming)
   -- declared character (prototype.md §4.1) and were previously indistinguishable
   -- from scenery whether or not the ball had just hit them.
   for i, b in ipairs(def.bumpers or {}) do
-    local pulse = fx and fx.bumper_pulse(def.id, i) or 0
+    local pulse = fx and fx.hit_pulse(def.id, "bumper", i) or 0
     local r = b.r * (1 + 0.18 * pulse)
     love.graphics.setColor(0.95 * dim, 0.85 * dim, 0.30 * dim, 0.85 + 0.15 * pulse)
     love.graphics.setLineWidth(2 + 3 * pulse)
@@ -190,6 +191,25 @@ local function draw_board(def, snap, prev, alpha, view, active, heat, incoming)
     love.graphics.setColor(0.95 * dim, 0.85 * dim, 0.30 * dim, 0.18 + 0.62 * pulse)
     love.graphics.circle("fill", b.x, b.y, r)
     love.graphics.setLineWidth(3)
+  end
+
+  -- Targets. A lit one has been hit and is waiting for the rest of its bank;
+  -- the difference has to be visible at a glance or the bank is a mechanic
+  -- only the scoreboard knows about.
+  for i, t in ipairs(def.targets or {}) do
+    local tstate = tstates and tstates[i]
+    local lit    = tstate and tstate.lit
+    local pulse  = fx and fx.hit_pulse(def.id, "target", i) or 0
+    local corners = geo.rect_corners(t)
+    if lit then
+      love.graphics.setColor(0.55 * dim, 0.98 * dim, 0.70 * dim, 0.85 + 0.15 * pulse)
+    else
+      love.graphics.setColor(0.80 * dim, 0.82 * dim, 0.90 * dim, 0.45 + 0.55 * pulse)
+    end
+    love.graphics.polygon("fill", corners)
+    love.graphics.setColor(1, 1, 1, (lit and 0.5 or 0.22) + 0.5 * pulse)
+    love.graphics.setLineWidth(1.5)
+    love.graphics.polygon("line", corners)
   end
 
   -- Tube mouth and arrival point (§5: the link, always visible)
@@ -472,7 +492,8 @@ function M.draw(match, legend, debug_on)
   for _, id in ipairs({ "a", "b" }) do
     draw_board(match.defs[id], match.cur[id], match.prev[id], match.alpha,
                M.view[id], id == state.active, heat,
-               (t and id == t.to) and incoming_u or nil)
+               (t and id == t.to) and incoming_u or nil,
+               state.boards[id] and state.boards[id].targets)
   end
   if state.phase == "transit" then draw_transit(state, match.defs) end
   HA = M.hud_a

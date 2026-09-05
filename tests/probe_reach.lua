@@ -84,11 +84,14 @@ return function()
       if bx then
         mark(grid, bx, by)
         -- "Got up the board outside the ramp" -- the orbit lanes. The ramp
-        -- channel is x 189..241, so anything above y=520 outside it is a shot
-        -- that found somewhere else to go.
+        -- channel is centred on the tube mouth and 52px wide on both boards,
+        -- so derive it rather than hardcoding board A's numbers: B's ramp is
+        -- 46px further left and the fixed thresholds silently measured the
+        -- wrong lanes there.
+        local mouth = def.tube.mouth.x
         if by < 520 then
-          if bx < 180 then high_left  = true end
-          if bx > 250 then high_right = true end
+          if bx < mouth - 35 then high_left  = true end
+          if bx > mouth + 35 then high_right = true end
         end
       end
       if done then break end

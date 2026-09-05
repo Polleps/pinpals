@@ -5,7 +5,8 @@
 --- file or anywhere else in sim/ -- that boundary is what keeps the headless
 --- test harness working (§5, §7).
 
-local C = require("core.constants")
+local C   = require("core.constants")
+local geo = require("core.geometry")
 
 local Board = {}
 Board.__index = Board
@@ -36,6 +37,19 @@ local function build_bumpers(self, def)
     f:setRestitution(b.restitution or 1.2)
     f:setFriction(0.02)
     ud(f, "bumper", i)
+  end
+end
+
+--- Standup targets. Static like walls, but they report being hit, which is
+--- what makes them content rather than scenery. Corners come from core/ so
+--- the fixture, the geometry checks and the drawing cannot disagree.
+local function build_targets(self, def)
+  for i, t in ipairs(def.targets or {}) do
+    local shape = love.physics.newPolygonShape(geo.rect_corners(t))
+    local f = love.physics.newFixture(self.ground, shape, 0)
+    f:setRestitution(t.restitution or 0.45)
+    f:setFriction(0.10)
+    ud(f, "target", i)
   end
 end
 
@@ -121,6 +135,7 @@ function Board.new(def)
 
   build_walls(self, def)
   build_bumpers(self, def)
+  build_targets(self, def)
   build_mouth(self, def)
   build_devices(self, def)
   for _, spec in ipairs(def.flippers) do build_flipper(self, def, spec) end
@@ -209,6 +224,12 @@ function Board:_begin(fa, fb, _)
     local hit = self.def.bumpers[other.id]
     self.events[#self.events+1] = {
       kind = "bumper", board = self.id, index = other.id, x = hit.x, y = hit.y,
+    }
+
+  elseif other.kind == "target" then
+    local t = self.def.targets[other.id]
+    self.events[#self.events+1] = {
+      kind = "target", board = self.id, index = other.id, x = t.x, y = t.y,
     }
   end
 end

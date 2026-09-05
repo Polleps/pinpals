@@ -36,11 +36,23 @@ function M.new(boards)
     },
   }
   for id, def in pairs(boards) do
-    local b = { id = id, flippers = { left = false, right = false }, devices = {} }
+    local b = {
+      id = id, flippers = { left = false, right = false },
+      devices = {}, targets = {}, banks = {},
+    }
     for _, d in ipairs(def.devices) do
       -- `commanded` is a rule-level fact: what the operator has asked for.
       -- Where the device physically *is* belongs to sim/, not here.
       b.devices[d.id] = { commanded = false }
+    end
+    -- Which targets make up which bank, resolved once here rather than
+    -- rediscovered from the definitions on every hit. Plain data, so the
+    -- whole state stays serializable (§5.2).
+    for i, t in ipairs(def.targets or {}) do
+      b.targets[i] = { lit = false, bank = t.bank }
+      local bank = b.banks[t.bank]
+      if not bank then bank = { members = {}, cleared = 0 }; b.banks[t.bank] = bank end
+      bank.members[#bank.members+1] = i
     end
     s.boards[id] = b
   end
@@ -156,6 +168,28 @@ function M.consume(s, events)
       -- pass that earned it rather than one pass late.
       s.last_award = { kind = "pass", value = score.award(s.stats, "pass"), board = to }
 
+    elseif ev.kind == "target" and s.phase == "play" then
+      local board = s.boards[ev.board]
+      local t = board and board.targets[ev.index]
+      if t then
+        -- A standup scores every time it is struck, the way a real one does,
+        -- but only counts once toward its bank. Otherwise the cheapest way to
+        -- clear a bank is to rattle against a single target.
+        local total = score.award(s.stats, "target")
+        if not t.lit then
+          t.lit = true
+          local bank = board.banks[t.bank]
+          if bank and M.bank_complete(board, bank) then
+            total = total + score.award(s.stats, "bank")
+            bank.cleared = bank.cleared + 1
+            for _, mi in ipairs(bank.members) do board.targets[mi].lit = false end
+          end
+        end
+        s.last_award = {
+          kind = "target", value = total, board = ev.board, x = ev.x, y = ev.y,
+        }
+      end
+
     elseif ev.kind == "bumper" and s.phase == "play" then
       s.last_award = {
         kind = "bumper", value = score.award(s.stats, "bumper"),
@@ -171,6 +205,17 @@ function M.consume(s, events)
       score.end_rally(s.stats)
     end
   end
+end
+
+--- Is every target in this bank lit?
+---@param board table per-board state
+---@param bank table
+---@return boolean
+function M.bank_complete(board, bank)
+  for _, i in ipairs(bank.members) do
+    if not board.targets[i].lit then return false end
+  end
+  return true
 end
 
 --- Convenience for the renderer and for tests: what is each player doing?

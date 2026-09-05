@@ -493,6 +493,47 @@ return function(H)
     end)
   end)
 
+  describe("targets (§13.1: Glasshouse's character)", function()
+    it("b: every target is reachable in play", function()
+      -- Same lesson as Foundry's bumpers: a target nothing can reach is
+      -- scenery. Board B's bank is the only aimed scoring content in the
+      -- game, so if it is unreachable the board has no identity again.
+      local def = boards.b
+      local seen, total = {}, 0
+      for seed = 1, 3 do
+        math.randomseed(8800 + seed)
+        local b = Board.new(def)
+        b:serve()
+        local c = cmd()
+        for i = 1, math.floor(40 * C.TICK_HZ) do
+          if i % 30 == 0 then
+            c = cmd(math.random() < 0.55, math.random() < 0.2,
+                    math.random() < 0.35, math.random() < 0.35)
+          end
+          local dead = false
+          for _, ev in ipairs(b:step(c, b.ball ~= nil)) do
+            if ev.kind == "drain" or ev.kind == "tube" then dead = true end
+            if ev.kind == "target" then
+              seen[ev.index] = (seen[ev.index] or 0) + 1
+              total = total + 1
+            end
+          end
+          if dead then b:serve() end
+        end
+      end
+      for i = 1, #def.targets do
+        A.truthy((seen[i] or 0) > 0,
+          ("target %d is unreachable: it is scenery, not content"):format(i))
+      end
+      -- Floor well under the measured rate, as with the bumpers: this is a
+      -- "the bank is still live" tripwire, not a tuning target. Two targets
+      -- measure ~0.29 hits/s here and ~0.4/s over the longer identity probe;
+      -- 0.12 catches the bank going dead without failing on seed noise.
+      A.truthy(total / 120 > 0.12,
+        ("the bank is barely live: %.2f hits/s"):format(total / 120))
+    end)
+  end)
+
   ---------------------------------------------------------------------------
   -- Bumper scoring. A rule, not a contact: unlike `impact`, this one is meant
   -- to reach core/.

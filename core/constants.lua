@@ -63,7 +63,9 @@ C.TRANSIT_MAX_SP = C.BALL_MAX_SPEED
 -- difficulty setting behind it.
 C.HEAT_MAX       = 10          -- x10 ceiling, so a long rally still has a top
 C.SCORE_PASS     = 1000        -- awarded per crossing, at the new heat
-C.SCORE_BUMPER   = 50          -- the only shot content that exists yet
+C.SCORE_BUMPER   = 50          -- chaos: cheap, frequent, not aimed
+C.SCORE_TARGET   = 250         -- precision: you meant to hit this
+C.SCORE_BANK     = 2500        -- clearing a whole bank, before the multiplier
 -- There is deliberately no bumper cooldown constant. One was written, then
 -- measured away: see the note in sim/board.lua:_begin and the numbers in
 -- tests/probe_scoring.lua.

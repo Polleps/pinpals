@@ -338,4 +338,103 @@ return function(H)
     end)
   end)
 
+  ---------------------------------------------------------------------------
+  -- §13.1 Board identity, and the target banks that carry it.
+  ---------------------------------------------------------------------------
+  describe("target banks", function()
+    local score = require("core.score")
+
+    --- The board that actually has a bank. Raises rather than returning nil,
+    --- so a board set with no targets at all fails here loudly instead of
+    --- letting every test below quietly pass over an empty list.
+    local function banked_board()
+      for id, def in pairs(boards) do
+        if def.targets and #def.targets > 0 then return id, def end
+      end
+      error("no board has targets: Glasshouse has lost its identity", 2)
+    end
+
+    it("exists on exactly one board, which is that board's character", function()
+      A.equal("b", (banked_board()), "the target bank moved off Glasshouse")
+    end)
+
+    it("lights a target when it is hit, and pays for it", function()
+      local id = banked_board()
+      local s = state.new(boards)
+      s.phase = "play"
+      state.consume(s, { { kind = "target", board = id, index = 1, x = 1, y = 2 } })
+      A.truthy(s.boards[id].targets[1].lit, "a struck target did not light")
+      A.equal(C.SCORE_TARGET * score.heat(0), s.stats.score)
+    end)
+
+    it("pays a struck target again but does not re-count it", function()
+      -- Otherwise the cheapest way to clear a bank is to rattle one target.
+      local id, def = banked_board()
+      local s = state.new(boards)
+      s.phase = "play"
+      local hit = { kind = "target", board = id, index = 1, x = 1, y = 2 }
+      state.consume(s, { hit })
+      local after_one = s.stats.score
+      state.consume(s, { hit })
+      A.equal(after_one * 2, s.stats.score, "a repeat hit stopped scoring")
+      local lit = 0
+      for i = 1, #def.targets do
+        if s.boards[id].targets[i].lit then lit = lit + 1 end
+      end
+      A.equal(1, lit, "one target counted twice toward its bank")
+    end)
+
+    it("pays a bonus and resets when the whole bank is lit", function()
+      local id, def = banked_board()
+      local s = state.new(boards)
+      s.phase = "play"
+      local plain = 0
+      for i = 1, #def.targets do
+        state.consume(s, { { kind = "target", board = id, index = i, x = 0, y = 0 } })
+        if i < #def.targets then plain = s.stats.score end
+      end
+      A.truthy(s.stats.score > plain + C.SCORE_TARGET,
+               "clearing the bank paid nothing over the last target")
+      for i = 1, #def.targets do
+        A.truthy(not s.boards[id].targets[i].lit,
+                 ("target %d stayed lit after the bank cleared"):format(i))
+      end
+    end)
+  end)
+
+  describe("board identity (§13.1)", function()
+    --- The geometric half of the identity, which is pure data and therefore
+    --- worth asserting cheaply here: Foundry is the forgiving board, and
+    --- "forgiving" is mostly the width of the gap the ball falls through.
+    --- Behavioural confirmation (ball life, points/s) lives in
+    --- tests/probe_identity.lua, which is too slow to be a gate.
+    local function drain_gap(def)
+      local left, right
+      for _, f in ipairs(def.flippers) do
+        if f.side == "left" then left = f else right = f end
+      end
+      local reach = math.cos(C.FLIPPER_REST) * C.FLIPPER_LEN
+      return (right.x - reach) - (left.x + reach)
+    end
+
+    it("gives Foundry the narrower drain", function()
+      -- This was measurably backwards before 2026-09-06: the board documented
+      -- as forgiving drained MORE often per second than the one documented as
+      -- punishing.
+      A.truthy(drain_gap(boards.a) < drain_gap(boards.b) - 8,
+        ("Foundry %.1fpx vs Glasshouse %.1fpx: the boards have stopped differing")
+          :format(drain_gap(boards.a), drain_gap(boards.b)))
+    end)
+
+    it("keeps the ball wider than neither gap", function()
+      -- A gap under a ball width is a wall, not a drain, and would quietly
+      -- turn one board into a board that cannot lose.
+      for _, id in ipairs({ "a", "b" }) do
+        A.truthy(drain_gap(boards[id]) > C.BALL_RADIUS * 2,
+          ("board %s cannot drain: gap %.1f, ball %.1f")
+            :format(id, drain_gap(boards[id]), C.BALL_RADIUS * 2))
+      end
+    end)
+  end)
+
 end

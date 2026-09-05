@@ -89,9 +89,9 @@ return function(H)
       local m = fake_match("play", { x = 95, y = 250 })
       local b = boards.a.bumpers[2]
       FX.update(m, { impact("a", "bumper", b.x + b.r, b.y, 90) }, 1 / 60)
-      A.truthy(FX.bumper_pulse("a", 2) > 0, "the struck bumper did not light")
-      A.equal(0, FX.bumper_pulse("a", 1), "an untouched bumper lit up")
-      A.equal(0, FX.bumper_pulse("b", 2), "the pulse crossed to the other board")
+      A.truthy(FX.hit_pulse("a", "bumper", 2) > 0, "the struck bumper did not light")
+      A.equal(0, FX.hit_pulse("a", "bumper", 1), "an untouched bumper lit up")
+      A.equal(0, FX.hit_pulse("b", "bumper", 2), "the pulse crossed to the other board")
     end)
 
     it("fades out", function()
@@ -100,7 +100,7 @@ return function(H)
       local b = boards.a.bumpers[1]
       FX.update(m, { impact("a", "bumper", b.x, b.y - b.r, 90) }, 1 / 60)
       for _ = 1, 40 do FX.update(m, {}, 1 / 60) end
-      A.equal(0, FX.bumper_pulse("a", 1), "a bumper stayed lit")
+      A.equal(0, FX.hit_pulse("a", "bumper", 1), "a bumper stayed lit")
     end)
   end)
 

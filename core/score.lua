@@ -38,13 +38,18 @@ function M.speed_scale(relay)
   return math.min(C.HEAT_SPEED_MAX, 1 + (relay or 0) * C.HEAT_SPEED_STEP)
 end
 
+--- What each thing is worth before the multiplier. The spread is the boards'
+--- identities in numbers: a bumper is chaos you did not aim, a target is a
+--- shot you meant, and a bank is a sequence you and your partner planned.
 local BASE = {
   pass   = C.SCORE_PASS,
   bumper = C.SCORE_BUMPER,
+  target = C.SCORE_TARGET,
+  bank   = C.SCORE_BANK,
 }
 
 --- What one scoring event is worth right now.
----@param kind "pass"|"bumper"
+---@param kind "pass"|"bumper"|"target"|"bank"
 ---@param relay integer
 ---@return integer
 function M.value(kind, relay)
@@ -62,7 +67,7 @@ end
 --- makes `best_rally` the number that actually answers §14: how good was the
 --- best thing these two players managed together?
 ---@param stats table
----@param kind "pass"|"bumper"
+---@param kind "pass"|"bumper"|"target"|"bank"
 ---@return integer awarded
 function M.award(stats, kind)
   local v = M.value(kind, stats.relay)

@@ -1,7 +1,15 @@
 --- Board A - "Foundry". Player 1's home board.
---- Character: chaotic and forgiving. A bumper cluster on the left keeps the
---- ball alive; the pass ramp sits right of centre, so it is the right
---- flipper's natural shot and a tip shot for the left.
+---
+--- Character: chaotic and forgiving, and as of this edit that is measured
+--- rather than asserted. See board_b.lua for the §13.1 answer in full; the
+--- half that lives here is "Foundry is where a rally SURVIVES".
+---
+---   board        gap    mean ball life   drains/s   points/s
+---   Foundry     27.6            12.19s     0.0725         24
+---   Glasshouse  43.6             9.86s     0.0777        125
+---
+--- The ball lives 24% longer here and pays a fifth as much. That is the
+--- trade the pass is choosing between.
 ---
 --- Coordinates are world pixels (core/constants.lua: 64 px = 1 m), y down,
 --- origin at the board's top-left. Playfield is 384 x 768.
@@ -20,12 +28,22 @@ return {
     -- Lower left: feeds the left flipper. Descends monotonically -- any local
     -- minimum in a wall chain is a pocket the ball settles into and never
     -- leaves. Ends just outside and above the pivot: close enough that a ball
-    -- cannot wedge in the gap (7px, the ball is 17px), clear enough that the
-    -- wall is never inside the flipper's swept arc.
-    { 10,610,  70,664,  120,678,  128,683 },
+    -- cannot wedge in the gap, clear enough that the wall is never inside the
+    -- flipper's swept arc.
+    --
+    -- Both ends moved with the flippers, and then further. Narrowing the
+    -- drain made the ball spend far more time beside the pivots, which found
+    -- a pocket that had always been there and was simply never reached: the
+    -- ball perches on the wall's endpoint in the shallow V between it and the
+    -- flipper's upper surface. Preserving the old 7px offset did NOT fix it
+    -- (14% of swept shots stuck); pulling the end back to a 9.9px offset did,
+    -- because the V stops being shallow enough to hold a ball and it falls
+    -- through onto the flipper instead. Caught by the existing stuck-ball
+    -- test, not by the geometry gate -- see docs/overnight.md.
+    { 10,610,  70,664,  122,678,  129,681 },
     -- Lower right: same rules. The old chain turned back up at the end to meet
     -- the pivot, which put a V at (300,702) that swallowed the ball.
-    { 374,656,  344,668,  300,676,  256,683 },
+    { 374,656,  344,668,  300,676,  255,681 },
     -- The pass ramp: a centre channel with a flared mouth, sitting above the
     -- gap between the flippers because that is where flipper shots actually
     -- go -- measured, not guessed.
@@ -89,9 +107,22 @@ return {
     { x = 80, y = 376, r = 20, restitution = 1.15 },
   },
 
+  -- Moved 3px inward each from 133/251, narrowing the drain gap 33.6 -> 27.6.
+  -- This is the whole of Foundry's identity, and it was missing: the board
+  -- documented as "forgiving" measured as the DEADLIER of the two, draining
+  -- 0.0815/s against Glasshouse's 0.0777 despite a 10px narrower gap. It was
+  -- worse on every axis at once, which is a bug rather than a character.
+  --
+  --   flippers in   gap    mean life   drains/s
+  --             0  33.6       10.22s     0.0815
+  --             3  27.6       12.19s     0.0725   <- here
+  --             6  21.6       17.16s     0.0223
+  --
+  -- 6px is a wall, not a board: a 21.6px gap against a 17.3px ball barely
+  -- drains at all. 3px is forgiving without being safe.
   flippers = {
-    { side = "left",  x = 133, y = 688 },
-    { side = "right", x = 251, y = 688 },
+    { side = "left",  x = 136, y = 688 },
+    { side = "right", x = 248, y = 688 },
   },
 
   -- §6.1: both devices are persistent states with a visible travel time.

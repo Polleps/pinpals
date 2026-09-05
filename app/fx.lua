@@ -21,7 +21,9 @@ local rings, sparks, shake = {}, {}, { amp = 0 }
 local awards = {}                     -- floating score numbers
 local award_font
 local trail  = { a = {}, b = {} }
-local pulses = { a = {}, b = {} }     -- bumper index -> remaining seconds
+-- board -> "<kind>:<index>" -> remaining seconds. Keyed by kind as well as
+-- index because bumper 2 and target 2 are different objects in the same board.
+local pulses = { a = {}, b = {} }
 
 ---------------------------------------------------------------------------
 -- Impact strength
@@ -114,7 +116,7 @@ local function on_impact(ev, defs)
   if ev.what == "bumper" then
     -- Board A's character. Worth more than a ring: light the whole thing up.
     local i = bumper_at(defs[ev.board], ev.x, ev.y)
-    if i then pulses[ev.board][i] = 0.30 end
+    if i then pulses[ev.board]["bumper:" .. i] = 0.30 end
     add_sparks(ev.board, ev.x, ev.y, 6 + math.floor(10 * s), 190, c[1], c[2], c[3])
   elseif s > 0.30 then
     -- Below this a contact is a tick, not an event, and drawing it for every
@@ -189,6 +191,8 @@ function FX.update(match, events, dt)
       add_sparks(ev.board, def.size.w / 2, def.drain_y, 26, 240, 1.0, 0.35, 0.30)
     elseif ev.kind == "tube" then
       add_shake(2.2)
+    elseif ev.kind == "target" then
+      pulses[ev.board]["target:" .. ev.index] = 0.30
     elseif ev.kind == "award" then
       add_award(ev.board, ev.x, ev.y, ev.value)
     end
@@ -238,9 +242,13 @@ function FX.shake_offset()
   return (math.random() * 2 - 1) * shake.amp, (math.random() * 2 - 1) * shake.amp
 end
 
---- How lit a bumper is right now, 0..1. render.lua asks per bumper.
-function FX.bumper_pulse(board, index)
-  local t = pulses[board] and pulses[board][index]
+--- How lit a struck thing is right now, 0..1. render.lua asks per object.
+---@param board string
+---@param kind "bumper"|"target"
+---@param index integer
+---@return number
+function FX.hit_pulse(board, kind, index)
+  local t = pulses[board] and pulses[board][kind .. ":" .. index]
   return t and (t / 0.30) or 0
 end
 

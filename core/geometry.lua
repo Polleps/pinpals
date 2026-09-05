@@ -20,6 +20,26 @@ local BALL_D = C.BALL_RADIUS * 2
 
 local function clamp(v, lo, hi) return math.max(lo, math.min(hi, v)) end
 
+--- The four corners of a rotated rectangle, as a flat x,y list.
+---
+--- Exported because three layers need to agree on exactly where a target is:
+--- sim/ builds a polygon fixture from it, this module checks its clearances,
+--- and app/ draws it. Three copies of this arithmetic would be three chances
+--- for the picture to disagree with the physics.
+---@param t table x, y, w, h, angle
+---@return number[] eight numbers, four corners clockwise
+function M.rect_corners(t)
+  local a = t.angle or 0
+  local c, s = math.cos(a), math.sin(a)
+  local hw, hh = t.w / 2, t.h / 2
+  local out = {}
+  for _, p in ipairs({ { -hw, -hh }, { hw, -hh }, { hw, hh }, { -hw, hh } }) do
+    out[#out+1] = t.x + p[1] * c - p[2] * s
+    out[#out+1] = t.y + p[1] * s + p[2] * c
+  end
+  return out
+end
+
 --- Distance from a point to a segment, and the closest point on it.
 local function point_seg(px, py, ax, ay, bx, by)
   local dx, dy = bx - ax, by - ay
@@ -224,6 +244,53 @@ local function check_wedges(board, segs, out)
           kind = "wedge", x = bump.x, y = bump.y,
           msg = ("bumpers %d and %d are %.1fpx apart; the ball is %.1fpx wide")
                 :format(bi, bj, d, BALL_D),
+        }
+      end
+    end
+  end
+
+  -- Targets are solid too: a standup parked a sub-ball-width from a wall is
+  -- a pocket in exactly the way a bumper is, and it is easier to author by
+  -- accident because a target is small and its angle is easy to get wrong.
+  for ti, t in ipairs(board.targets or {}) do
+    local c = M.rect_corners(t)
+    for e = 0, 3 do
+      local i = e * 2 + 1                      -- this corner
+      local j = ((e + 1) % 4) * 2 + 1          -- the next one, wrapping
+      for _, w in ipairs(segs) do
+        local d = seg_seg(c[i], c[i+1], c[j], c[j+1], w.ax, w.ay, w.bx, w.by)
+        if d < BALL_D then
+          out[#out+1] = {
+            kind = "wedge", x = t.x, y = t.y,
+            msg = ("target %d sits %.1fpx from wall %d; the ball is %.1fpx wide")
+                  :format(ti, d, w.poly, BALL_D),
+          }
+        end
+      end
+    end
+
+    -- And against each other. A bank is authored as a row of near-identical
+    -- entries, which makes it very easy to space them by less than they are
+    -- wide -- at which point they overlap into one bar on screen and form a
+    -- throat between them in the physics. Both happened on the first draft of
+    -- Glasshouse's bank, and only the picture gave it away.
+    for tj = ti + 1, #board.targets do
+      local o = board.targets[tj]
+      local oc = M.rect_corners(o)
+      local best = math.huge
+      for e1 = 0, 3 do
+        local a1, b1 = e1 * 2 + 1, ((e1 + 1) % 4) * 2 + 1
+        for e2 = 0, 3 do
+          local a2, b2 = e2 * 2 + 1, ((e2 + 1) % 4) * 2 + 1
+          best = math.min(best, seg_seg(c[a1], c[a1+1], c[b1], c[b1+1],
+                                        oc[a2], oc[a2+1], oc[b2], oc[b2+1]))
+        end
+      end
+      if best < BALL_D then
+        out[#out+1] = {
+          kind = "wedge", x = t.x, y = t.y,
+          msg = ("targets %d and %d are %.1fpx apart; the ball is %.1fpx wide")
+                :format(ti, tj, best, BALL_D),
         }
       end
     end

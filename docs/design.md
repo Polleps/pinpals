@@ -132,8 +132,40 @@ The two boards are **different, and interconnected by state**. Not mirrors.
 - The dormant board is shown as a small panel that lights up when cross-board state
   changes, so you always know what you've built up over there.
 
-**OPEN:** Board identities/themes, and what each is *good at*. The specialisation is the
-reason to pass, so this needs to be concrete before layout work starts.
+**PROVISIONAL (2026-09-06):** Board identities/themes, and what each is *good at*.
+
+**Foundry is where a rally survives. Glasshouse is where it pays.**
+
+| | Foundry | Glasshouse |
+|---|---|---|
+| Character | chaotic, forgiving, cheap | clean, precise, expensive |
+| Content | a bumper cluster in the orbit lane | a two-target bank |
+| Drain gap | 27.6px | 43.6px |
+| Mean ball life | 12.19s | 9.05s |
+| Drains per second | 0.0725 | 0.0810 |
+| Pass rate from a swept flip | 54% | 66% |
+| **Points per second** | **24** | **351** |
+
+That puts §6.2's trade — "the safe thing for me or the good thing for you" — one level
+up, onto the pass itself: do I keep the rally alive, or send it somewhere it can
+actually score? And because §9 makes a hot rally worth more, the temptation to cash in
+on Glasshouse grows at exactly the rate the cost of losing it does. The risk curve and
+the geometry pull in the same direction, which is the whole reason to have two boards
+rather than one board twice.
+
+Glasshouse pays roughly 15x per second of ball time and kills the ball a third faster.
+Neither number was chosen; both fell out of giving each board content its own shape can
+actually deliver to the ball.
+
+This replaces the earlier claim ("Foundry forgiving, Glasshouse punishing to sit on"),
+which had never been measured and was backwards: Glasshouse had the *higher* survival
+rate of the two, 27% against Foundry's 15%, and Foundry drained more often per second
+of ball time despite a narrower gap. Foundry was worse on every axis at once — not an
+identity, a bug. Fixed by narrowing its flipper gap; the numbers above are after.
+
+**Still open underneath this:** the two boards differ in what they are *for*, but not
+yet in how they are *played*. Nothing on Foundry rewards a skill that Glasshouse
+punishes. Cross-board state (§7) is the obvious next lever.
 
 ## 8. Failure and rescue **DECIDED**
 
@@ -200,7 +232,7 @@ host-authoritative netcode sufficient instead of needing something exotic.
 
 ## 13. Open questions, consolidated
 
-1. Board identities — what is each board *for*? (blocks layout work)
+1. ~~Board identities — what is each board *for*?~~ **PROVISIONAL, see §7**
 2. Session structure — endless, goal-based, or run-based? (blocks scoring)
 3. Tube count and directionality
 4. Operator resource model — cooldowns only, or a meter?

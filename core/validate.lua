@@ -46,6 +46,22 @@ function M.board(b)
     end
   end
 
+  for i, t in ipairs(b.targets or {}) do
+    if not (isnum(t.x) and isnum(t.y) and isnum(t.w) and isnum(t.h)) then
+      e[#e+1] = ("targets[%d]: expected x, y, w, h"):format(i)
+    end
+    if t.angle ~= nil and not isnum(t.angle) then
+      e[#e+1] = ("targets[%d].angle: expected a number"):format(i)
+    end
+    -- Every target belongs to a bank; a lone target has a bank of one. That
+    -- keeps the completion rule in core/ from needing a special case, and it
+    -- means a typo'd bank name shows up here as a bank that never completes
+    -- rather than as a mechanic that silently does nothing.
+    if type(t.bank) ~= "string" or t.bank == "" then
+      e[#e+1] = ("targets[%d].bank: expected a non-empty string"):format(i)
+    end
+  end
+
   -- Exactly one left and one right flipper.
   local sides = {}
   if type(b.flippers) ~= "table" or #b.flippers ~= 2 then
@@ -143,6 +159,7 @@ function M.board(b)
     end
     for _, f in ipairs(b.flippers or {}) do inside("flipper", f.x, f.y) end
     for _, bump in ipairs(b.bumpers or {}) do inside("bumper", bump.x, bump.y) end
+    for i, t in ipairs(b.targets or {}) do inside("target " .. i, t.x, t.y) end
     if b.tube and b.tube.mouth then inside("tube.mouth", b.tube.mouth.x, b.tube.mouth.y) end
     if b.entry then inside("entry", b.entry.x, b.entry.y) end
     if b.serve then inside("serve", b.serve.x, b.serve.y) end
