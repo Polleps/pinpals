@@ -90,7 +90,7 @@ call, document as PROVISIONAL in `design.md`.
 in, which arms A again. This is the thing that makes two boards a *game* rather than
 two boards. Depends on 5 and 6.
 
-### 8. The post is too absolute  ·  TODO
+### 8. The post is too absolute  ·  DONE (b07a9fe)
 
 Blocks 20/32 → 0/32 of pass shots. Legible, but it parks the flipper player, which
 brushes pillar 1. Try narrowing it / letting flat shots under. Target: a number
@@ -105,6 +105,13 @@ from realistic incoming trajectories, then tune.
 
 §5.1 gets recording free from the intent stream. A session that writes intents + stats
 turns Polle's morning play into a measurement instead of an impression.
+
+### 13. prototype.md now describes a game that no longer exists  ·  TODO
+
+§1 still says "No scoring, no modes, no cross-board unlocks" and §4 lists provisional
+calls that have since been made and measured. The doc has been patched section by
+section as the night went on; it needs one honest pass to describe what is actually
+there, so Polle reads the game rather than its history.
 
 ### 11+ Think of other ways to improve the game  ·  TODO
 
@@ -367,5 +374,47 @@ table definition, so a new relationship is a `links` entry rather than a branch 
 `core/state.lua`. `core/validate.lua` rejects a link naming a board, meter or target
 that doesn't exist: a typo there would be a mechanic that silently never fires, which
 is the worst failure available to something two players are building toward together.
+
+### Iteration 8 — the post was a pause button · `b07a9fe`
+
+`prototype.md` flagged the post as maybe too absolute (20/32 passes down, 0/32 up).
+Re-measuring found it worse: **absolute in both directions.**
+
+| board | post | pass rate | drains stopped |
+|---|---|---|---|
+| Foundry | down | 58% | 32% |
+| Foundry | **UP** | **0%** | **100%** |
+| Glasshouse | down | 69% | 17% |
+| Glasshouse | **UP** | **0%** | **100%** |
+
+With it raised *nothing could happen at all* — you couldn't pass and you couldn't lose
+the ball. Not §6.2's trade but a pause button, breaking pillar 1 with a device that
+looks like it's helping: nothing to do **and** nothing to fear.
+
+The cause was 12 pixels. The post sat at y=676, *above* the pivots at y=688, directly
+in every shot's launch path. At y=713 it sits below them: Foundry 58%→40%, Glasshouse
+69%→31%, still stopping 100% of drains. (y=726 is the opposite failure — a guard that
+costs nothing gets held up forever.) The slope is ~16 points of pass rate **per pixel**,
+so any edit to that number is a redesign of the device.
+
+**The best part wasn't designed.** The cost is sharply asymmetric, because each board's
+ramp is off-centre and the post blocks whichever flipper shoots *across* the middle:
+
+| | left flipper | right flipper |
+|---|---|---|
+| Foundry, post up | 58% → **25%** | 58% → 54% |
+| Glasshouse, post up | 75% → 54% | 63% → **8%** |
+
+So a raised post doesn't stop the pass, it **moves** it — work the ball to the near
+flipper. The flipper player has something to do while their partner guards, and the two
+boards block opposite sides so the skill doesn't transfer.
+
+**Two harness bugs found on the way**, both of which would have shipped a wrong
+conclusion. My first test swept Foundry's *right* flipper — the one the post barely
+affects — and concluded it cost nothing. The second used the shared `on_flipper`
+helper, which starts the ball 15.9px clear rather than 10.6px; that's enough for it to
+bounce before the flip lands, washing the effect out entirely (13/28 vs 14/28, against
+58% and 40% from a ball actually resting on the flipper). Those two harnesses disagree,
+which is now written down where the next agent will see it.
 
 *(iterations append here)*
