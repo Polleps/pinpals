@@ -46,7 +46,7 @@ the answer is "give the flipper player something to do while it's up".
 
 Status: TODO / DOING / DONE / BLOCKED. Newest notes at the bottom of each item.
 
-### 1. Audio — the game makes no sound at all  ·  TODO
+### 1. Audio — the game makes no sound at all  ·  DONE (61a6733)
 
 `§10: audio does the warning work.` The module is switched off. Synthesize waveforms
 at load (`love.sound.newSoundData`) rather than shipping asset files — keeps the repo
@@ -106,12 +106,47 @@ from realistic incoming trajectories, then tune.
 §5.1 gets recording free from the intent stream. A session that writes intents + stats
 turns Polle's morning play into a measurement instead of an impression.
 
-### 11+ Think of other ways to improve the game
+### 11+ Think of other ways to improve the game  ·  TODO
 
-If you're already here and the night's not over yet. Continue working on the game, think of cool things to add, or improve. Document them and add them.
+Polle's addition. If the backlog runs out before the night does, keep going: think of
+cool things to add or improve, document them, add them here.
+
+### 12. Board A's bumper cluster is nearly unreachable  ·  TODO
+
+Found while measuring impulses for item 1: **1 bumper contact in 240 seconds** of
+random play, against 23,088 wall contacts. `prototype.md` §4.1 calls the cluster
+Foundry's defining feature — "chaotic and forgiving, keeps the ball alive" — and in
+practice the ball almost never gets there. Either the cluster is in the wrong place
+or nothing feeds it. Measure reachability from real flipper shots before moving
+anything; this may be most of why board A has no character in play.
 
 ---
 
 ## Log
+
+### Iteration 1 — audio · `61a6733`
+
+Built the impact-event plumbing first, because items 1 and 2 both need it: sim/
+reports ball contacts, app/ decides what they look and sound like.
+
+The one real decision was the threshold below which a contact is not a hit. Rather
+than pick one by ear I measured 240s of random play, and the distribution answered
+it outright — 90% of wall contacts sat at 0.249–0.250 against a predicted resting
+impulse of `m·g·dt·METER` = 0.2519. That cluster *is* the ball sitting still, so the
+floor is defined as a margin above it rather than as a magic number, and it now
+follows gravity and tick rate automatically if either changes.
+
+| floor | impacts/s | reading |
+|---|---|---|
+| 0.20 | 96.9 | a 240 Hz buzz |
+| **0.30** | **7.2** | hits |
+
+Eleven synthesized voices, no asset files. Relay heat pitches the kit up so the
+table tightens audibly as a rally gets hotter — the first thing in the build that
+makes rally #6 feel different from rally #1.
+
+Incidental finding worth keeping: **bumpers were hit once in 240 seconds.** Board A's
+cluster is supposed to be its whole character and the ball essentially never reaches
+it. That is a live suspect for "not fun yet" and is now item 12.
 
 *(iterations append here)*
