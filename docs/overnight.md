@@ -84,7 +84,7 @@ real choice (§5: "passing must be tempting, not compulsory"). Data-only where p
 reason to pass, so this blocks everything about the pass being a decision. Make the
 call, document as PROVISIONAL in `design.md`.
 
-### 7. Cross-board state — the design's core hook, entirely absent  ·  TODO
+### 7. Cross-board state — the design's core hook, entirely absent  ·  DONE (e322a02)
 
 §7: completing something on A arms something on B; you play A to prepare B, pass, cash
 in, which arms A again. This is the thing that makes two boards a *game* rather than
@@ -331,5 +331,41 @@ New `target` device kind (scores, lights, forms banks) and two new geometry chec
 target-to-target wedge check caught this very commit's first draft: three targets 33px
 apart at 34px wide, overlapping into one bar on screen. **Only the screenshot revealed
 it** — which is twice now that looking at the render found what the gates could not.
+
+### Iteration 7 — the cross-board loop · `e322a02`
+
+§7's hook, built and verified end to end:
+
+```
+  Foundry bumpers  ──charge──▶  Glasshouse vault
+        ▲                              │
+        │                          clear it
+     lit ×5                            │
+        └──────────arms────────────────┘
+```
+
+Grind Foundry (0.6 bumper hits/s fills the ×10 vault in ~17s) → pass → clear the vault
+for a bonus scaled by everything Foundry built → Foundry's bumpers light at ×5 for 12
+hits → which recharge the vault.
+
+**The cap is the load-bearing part.** Past ×10, Foundry pays only its own 24 pts/s, so
+grinding stops out-earning passing. That is §5's "tempting, not compulsory" resolved in
+the direction that keeps the tube a decision: the home-grind line exists, pays, and
+then runs out.
+
+Verified in real matches rather than assumed — a loop like this can be entirely correct
+and still never occur:
+
+| seed | passes | max charge | banks | lit fired | score |
+|---|---|---|---|---|---|
+| 1 | 1 | 10 | 2 | yes | 33,400 |
+| 3 | 4 | 10 | 1 | yes | 37,000 |
+| 4 | 3 | 10 | 4 | yes | 55,500 |
+
+The wiring is **board data**, not rules — §5.3 lists cross-board wiring as part of a
+table definition, so a new relationship is a `links` entry rather than a branch in
+`core/state.lua`. `core/validate.lua` rejects a link naming a board, meter or target
+that doesn't exist: a typo there would be a mechanic that silently never fires, which
+is the worst failure available to something two players are building toward together.
 
 *(iterations append here)*
