@@ -82,10 +82,17 @@ end
 
 function M.update_camera(state, defs, dt)
   local k = 1 - math.exp(-12 * dt)      -- frame-rate independent smoothing
-  -- The pulled-back boards reach into the HUD column, so the HUD gets out of
-  -- the way for the duration of the beat (§10). It fades rather than slides,
-  -- which is also what lets it change sides without the move being visible.
-  M.hud_a = lerp(M.hud_a, (state.phase == "transit") and 0 or 1, k)
+  -- The HUD stays up during transit. It used to fade out for the whole beat,
+  -- on the assumption that the pulled-back boards reached into its column --
+  -- they do not: at S_TRANSIT the gap between the boards is 390px against
+  -- 214px in normal play, so pulling back makes *more* room, not less.
+  --
+  -- It mattered because prototype.md §4.5 hands the sender the destination
+  -- board's devices for exactly these ~800ms. Hiding the operator's panel for
+  -- the one window in which they are the operator is what made the transit
+  -- read as dead air, and it is a pillar-1 violation ("nobody waits") dressed
+  -- up as a camera move.
+  M.hud_a = lerp(M.hud_a, 1, k)
   for id, v in pairs(M.view) do
     v.s = lerp(v.s, target_scale(state, id), k)
     v.x, v.y = place(id, v.s, defs[id].size.w)
@@ -99,7 +106,38 @@ end
 -- Board
 ---------------------------------------------------------------------------
 
-local function draw_board(def, snap, prev, alpha, view, active, heat)
+--- The landing, telegraphed on the receiving board. §10 wants the incoming
+--- ball legible without looking at it, and this is the visual half of that:
+--- rings that tighten onto the entry point as the ball closes, so the
+--- operator can see how long they have left to rearrange the floor.
+---
+--- Drawn in board space, inside the receiving board's transform.
+local function draw_incoming(def, u)
+  local e = def.entry
+  local lg = love.graphics
+  -- Entry points sit against a wall by construction -- the ball arrives
+  -- through one -- so a fixed ring radius spills over the board edge and gets
+  -- scissored into a stray arc. Size the rings to the room actually there.
+  local room = math.min(e.x, def.size.w - e.x, e.y, 52)
+  local span = math.max(14, room - 12)   -- 10 is the inner radius below
+  -- Three rings, staggered, each collapsing onto the entry point. Staggering
+  -- them means there is always one mid-collapse, so the countdown reads at a
+  -- glance instead of only at the moment a single ring lands.
+  for i = 0, 2 do
+    local ru = (u + i / 3) % 1
+    lg.setColor(0.55, 0.95, 0.7, 0.55 * (1 - ru))
+    lg.setLineWidth(2)
+    lg.circle("line", e.x, e.y, 10 + span * (1 - ru))
+  end
+  -- The arrival vector, so "where" is as clear as "when".
+  lg.setColor(0.6, 1, 0.75, 0.35 + 0.45 * u)
+  lg.setLineWidth(2 + 2 * u)
+  lg.line(e.x, e.y, e.x + e.dir.x * 34, e.y + e.dir.y * 34)
+  lg.setColor(0.6, 1, 0.75, 0.25 + 0.6 * u)
+  lg.circle("fill", e.x, e.y, 4 + 3 * u)
+end
+
+local function draw_board(def, snap, prev, alpha, view, active, heat, incoming)
   local th = THEME[def.id]
   local dim = active and 1.0 or 0.45
 
@@ -184,6 +222,9 @@ local function draw_board(def, snap, prev, alpha, view, active, heat)
   -- Effects sit under the ball and over the geometry, in board space.
   if fx then fx.draw_board(def.id, heat) end
 
+  -- Incoming ball, on the board that is about to receive it.
+  if incoming then draw_incoming(def, incoming) end
+
   -- Ball. Its halo takes the rally heat: at rally 0 it is a plain white ball,
   -- and by rally 10 it is visibly running hot (§9).
   if snap.ball then
@@ -237,6 +278,17 @@ local function draw_transit(state, defs)
   end
   love.graphics.line(pts)
 
+  -- The travelled part of the arc, brightened: the ball leaves a wake, so the
+  -- direction of the pass is readable from a still frame.
+  love.graphics.setColor(0.6, 1, 0.75, 0.55)
+  love.graphics.setLineWidth(3)
+  local wake = {}
+  for i = 0, 16 do
+    local px, py = at(u * i / 16)
+    wake[#wake+1], wake[#wake+2] = px, py
+  end
+  if #wake >= 4 then love.graphics.line(wake) end
+
   local bx, by = at(u)
   love.graphics.setColor(0.6, 1, 0.75, 0.25)
   love.graphics.circle("fill", bx, by, 20)
@@ -247,7 +299,15 @@ local function draw_transit(state, defs)
   love.graphics.setColor(0.55, 0.95, 0.7, 0.9)
   local msg = ("IN TRANSIT  %.2fs   arriving at %.0f px/s   RALLY %d")
     :format(t.duration - t.t, t.speed, state.stats.relay)
-  love.graphics.printf(msg, 0, H - 52, W, "center")
+  love.graphics.printf(msg, 0, H - 74, W, "center")
+
+  -- A bar under the readout, because "0.43s" is a number you have to read and
+  -- a shrinking bar is one you can see while watching the board instead.
+  local bw = 260
+  love.graphics.setColor(1, 1, 1, 0.12)
+  love.graphics.rectangle("fill", (W - bw) / 2, H - 52, bw, 5, 2)
+  love.graphics.setColor(0.55, 0.95, 0.7, 0.85)
+  love.graphics.rectangle("fill", (W - bw) / 2, H - 52, bw * (1 - u), 5, 2)
 end
 
 ---------------------------------------------------------------------------
@@ -270,8 +330,21 @@ local function draw_hud(state, defs, snaps, legend)
   local def = defs[active]
 
   love.graphics.setFont(fonts.head)
+  local transit = state.phase == "transit"
   col(1, 1, 1, 0.92)
-  love.graphics.print("ON " .. def.name:upper(), x, y)
+  -- "PREPARING" rather than "ON": during the pass nobody is standing on this
+  -- board yet, and the sender needs to know the devices they are reaching for
+  -- are the ones under the ball's landing point (prototype.md §4.5).
+  local head = (transit and "PREPARING " or "ON ") .. def.name:upper()
+  love.graphics.print(head, x, y)
+  if transit then
+    -- Measured, not offset by a guess: "GLASSHOUSE" is long enough that a
+    -- fixed x+210 printed the countdown straight through the board name.
+    love.graphics.setFont(fonts.small)
+    col(0.55, 0.95, 0.7, 0.85)
+    love.graphics.print(("BALL INCOMING  %.2fs"):format(state.transit.duration - state.transit.t),
+                        x + fonts.head:getWidth(head) + 14, y + 9)
+  end
   y = y + 30
 
   -- Roles: implicit in ball position, so just report them (§4).
@@ -280,7 +353,9 @@ local function draw_hud(state, defs, snaps, legend)
   for p = 1, 2 do
     local flip = roles[p] == "flipper"
     col(flip and 1 or 0.45, flip and 0.78 or 0.6, flip and 0.25 or 0.85, 1)
-    love.graphics.print(("P%d  %s"):format(p, flip and "FLIPPER" or "OPERATOR"), x, y)
+    -- Mid-pass the receiver is not flipping yet, they are waiting to catch.
+    local label = flip and (transit and "RECEIVING" or "FLIPPER") or "OPERATOR"
+    love.graphics.print(("P%d  %s"):format(p, label), x, y)
     local L = legend[p]
     col(1, 1, 1, 0.35)
     love.graphics.setFont(fonts.small)
@@ -350,9 +425,14 @@ function M.draw(match, legend, debug_on)
   if fx then sx, sy = fx.shake_offset() end
   love.graphics.push()
   love.graphics.translate(sx, sy)
+  -- During transit the destination board counts as active: it is the one the
+  -- operator is working on, and the one the ball is about to land on.
+  local t = state.transit
+  local incoming_u = t and math.min(1, t.t / t.duration) or nil
   for _, id in ipairs({ "a", "b" }) do
     draw_board(match.defs[id], match.cur[id], match.prev[id], match.alpha,
-               M.view[id], id == state.active, heat)
+               M.view[id], id == state.active, heat,
+               (t and id == t.to) and incoming_u or nil)
   end
   if state.phase == "transit" then draw_transit(state, match.defs) end
   HA = M.hud_a
