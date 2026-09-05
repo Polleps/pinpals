@@ -66,7 +66,7 @@ not learn about any of it. Guard: `make shot` still renders, `check_layers.sh` c
 now it is ~800ms of dead air. This is the game's signature moment and it currently
 reads as a pause.
 
-### 4. Relay heat as real scoring  ·  TODO
+### 4. Relay heat as real scoring  ·  DONE (c5808a1)
 
 §9: the multiplier lives on passing, not on shots. Score model in `core/` (pure, unit
 tested), readout in `app/`. Heat rises per crossing, resets on drain — a risk curve
@@ -203,5 +203,46 @@ Worth noting for the morning: **two of the four bugs in this iteration were only
 findable by looking at the render** — a fixed pixel offset printed the countdown
 through the word "GLASSHOUSE", and the progress bar landed on the controls hint. The
 gates were green through both. `--shot` is doing real work now that it draws fx.
+
+### Iteration 4 — relay heat scoring · `c5808a1`
+
+The multiplier is now the crossing count: ×7 means "we have passed seven times
+without dropping it", which either player can say out loud mid-rally. The curve:
+
+| crossings | mult | rally total | same passes scattered | ratio |
+|---|---|---|---|---|
+| 1 | ×1 | 1,000 | 1,000 | 1.0× |
+| 5 | ×5 | 15,000 | 5,000 | 3.0× |
+| 10 | ×10 | 55,000 | 10,000 | 5.5× |
+
+A drain takes the rally and everything it was worth. That makes **best rally score**
+the number that answers §14 quantitatively — a monotonically rising session total is
+a record, not a measurement.
+
+I wrote heat as `1 + relay` first, which had the first pass of every life already
+paying ×2 and left the multiplier with no meaning of its own. The
+scattered-versus-together test caught it on the day it was written.
+
+**Two things measured away rather than shipped**, both worth knowing about:
+
+- **A bumper cooldown.** I assumed a ball leaving a high-restitution bumper would
+  register several begin-contacts and score for each. It does not — a 0.02s cooldown
+  suppresses *exactly* as many repeats as no cooldown (21 of 120 approaches either
+  way), so there is no solver jitter to filter, and the repeats that exist are
+  50–400ms apart: the ball genuinely coming back, which pinball rewards. Deleted the
+  constant and the per-bumper state. `tests/probe_scoring.lua` is kept so the next
+  agent tempted to add one re-runs it first.
+- **`TRANSIT_MAX_SP` at 40 m/s.** The top 384 px/s was dead range — sim clamps to
+  `BALL_MAX_SPEED` on the next step, so an arrival could never reach it. The constant
+  had been quietly lying about its range. Now pinned to the ball's own ceiling.
+
+Heat also raises arrival speed (+5%/crossing to +55%), which is §9's "moving faster".
+Deliberately *not* done by shortening transit: §5 and §11 make that 800ms the online
+latency budget, and spending it on escalation would foreclose network play to buy
+something the speed multiplier already gives.
+
+**Still unanswered and now more visible:** bumpers are the only shot content in the
+game, and item 12 says the ball reaches them once per 240s. The multiplier currently
+has almost nothing to multiply. Items 5 and 6 are where that gets fixed.
 
 *(iterations append here)*
