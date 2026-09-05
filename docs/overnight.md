@@ -54,7 +54,7 @@ text-only and the footprint at zero. Needs: flipper thwack, bumper pop, gate tra
 loop, tube whoosh, arrival warning, drain. Pitch rises with relay heat.
 Lives in `app/`. Must degrade silently when audio is unavailable (headless tests).
 
-### 2. Visual juice — impacts, shake, trail  ·  TODO
+### 2. Visual juice — impacts, shake, trail  ·  DONE (354dde4)
 
 Bumper pop, flipper contact flash, ball trail scaled to speed, screenshake on drain,
 device travel telegraphed rather than snapping. All in `app/render.lua`; the sim must
@@ -148,5 +148,31 @@ makes rally #6 feel different from rally #1.
 Incidental finding worth keeping: **bumpers were hit once in 240 seconds.** Board A's
 cluster is supposed to be its whole character and the ball essentially never reaches
 it. That is a live suspect for "not fun yet" and is now item 12.
+
+### Iteration 2 — visual juice · `354dde4`
+
+Impact rings, bumper flashes, sparks, a speed-scaled ball trail and screen shake,
+all fed by iteration 1's event stream so sound and light come from one hit rather
+than two systems guessing separately.
+
+Two judgement calls worth flagging for the morning, both easy to overrule:
+
+- **Shake is deliberately rare.** Only a drain and a genuinely hard hit produce any.
+  A cabinet does not wobble when the ball touches a wall, and constant shake reads as
+  a bug rather than as impact. If it feels too subtle at the keyboard, `add_shake`
+  call sites are the one knob.
+- **Sparks need `s > 0.30`.** At ~7 impacts/s, drawing every contact is television
+  static. Rings still draw for all of them.
+
+Relay heat is now visible as well as audible — the ball's halo runs white to hot
+through rally 10.
+
+`--shot` now drives fx the way `love.update` does. Without that every §7 screenshot
+showed a game with no trail, no sparks and no lit bumpers, which would have made the
+visual gate quietly useless for exactly the thing it was added to check.
+
+The seven new tests were each verified against the bug they claim to catch: removing
+the ring cap, the trail retraction, the shake decay or the shake clamp fails exactly
+one test apiece and no others.
 
 *(iterations append here)*
