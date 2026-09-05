@@ -21,6 +21,12 @@ ball is — that is the game, not a bug.
 
 `R` restart · `F1` debug readout · `Esc` quit
 
+Quitting writes a **session log** to LÖVE's save directory and prints the path. It
+holds a readable summary — rally length distribution, drains per board, operator duty
+cycle — followed by the tick-stamped intent stream, which is enough to replay the
+session (§5.1). Play, quit, and paste the summary: that turns an impression into
+something an agent can act on.
+
 ---
 
 ## 1. What is in it

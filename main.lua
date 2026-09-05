@@ -14,7 +14,7 @@ for i, v in ipairs(arg or {}) do
   if v == "--pass" then shot_open = true; shot_pass = true end
 end
 
-local match, render, input, audio, fx, boards
+local match, render, input, audio, fx, record, boards
 local debug_on = false
 local shot_done = false
 
@@ -34,6 +34,7 @@ function love.load()
   input  = require("app.input")
   audio  = require("app.audio")
   fx     = require("app.fx")
+  record = require("app.record")
   render.load(boards)
   render.attach_fx(fx)
   audio.load()          -- no-ops if the audio modules are off (--shot, --test)
@@ -69,6 +70,17 @@ function love.load()
   end
 
   for _, js in ipairs(love.joystick.getJoysticks()) do input.attach(js) end
+  -- §5.1: the intent stream makes a session recordable for free. Only in
+  -- play mode -- --test and --shot never touch the disk.
+  record.start(boards)
+end
+
+--- Every intent goes through here, so the recording cannot miss one by
+--- someone adding a fifth input path and forgetting about it.
+local function push_intent(it)
+  if not it then return end
+  match:push(it)
+  record.intent(it)
 end
 
 function love.update(dt)
@@ -79,6 +91,7 @@ function love.update(dt)
   local events = match:drain_events()
   audio.update(match, events)
   fx.update(match, events, dt)
+  record.update(match, events)
   render.update_camera(match.state, boards, dt)
 end
 
@@ -116,27 +129,33 @@ function love.keypressed(key)
     fx.reset()
     return
   end
-  local it = input.from_key(key, true, match.state.tick)
-  if it then match:push(it) end
+  push_intent(input.from_key(key, true, match.state.tick))
 end
 
 function love.keyreleased(key)
   if mode ~= "play" then return end
-  local it = input.from_key(key, false, match.state.tick)
-  if it then match:push(it) end
+  push_intent(input.from_key(key, false, match.state.tick))
 end
 
 function love.gamepadpressed(js, button)
   if mode ~= "play" then return end
-  local it = input.from_pad(js, button, true, match.state.tick)
-  if it then match:push(it) end
+  push_intent(input.from_pad(js, button, true, match.state.tick))
 end
 
 function love.gamepadreleased(js, button)
   if mode ~= "play" then return end
-  local it = input.from_pad(js, button, false, match.state.tick)
-  if it then match:push(it) end
+  push_intent(input.from_pad(js, button, false, match.state.tick))
 end
 
 function love.joystickadded(js)   if input then input.attach(js) end end
 function love.joystickremoved(js) if input then input.detach(js) end end
+
+--- Write the playtest capture on the way out, and say where it went, so a
+--- session that felt like something also produced something to read.
+function love.quit()
+  if mode ~= "play" or not record then return false end
+  print(("\n%s\n"):format(record.summary(match)))
+  local path = record.finish(match)
+  if path then print("session log: " .. path .. "\n") end
+  return false
+end
