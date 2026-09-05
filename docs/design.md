@@ -165,7 +165,35 @@ identity, a bug. Fixed by narrowing its flipper gap; the numbers above are after
 
 **Still open underneath this:** the two boards differ in what they are *for*, but not
 yet in how they are *played*. Nothing on Foundry rewards a skill that Glasshouse
-punishes. Cross-board state (§7) is the obvious next lever.
+punishes.
+
+### 7.1 The cross-board loop, as built **PROVISIONAL (2026-09-06)**
+
+The §7 hook, concretely:
+
+```
+  Foundry bumpers  ──charge──▶  Glasshouse vault
+        ▲                              │
+        │                          clear it
+     lit x5                            │
+        └──────────arms────────────────┘
+```
+
+1. **Grind Foundry.** Each bumper hit charges Glasshouse's vault, up to ×10. At the
+   measured 0.6 hits/s that fills in ~17 seconds.
+2. **Pass.** Past the cap, Foundry pays only its own 24 points/s — the cap is what
+   makes the pass the only way to cash, which is §5's "tempting, not compulsory"
+   resolved in the direction that keeps the tube a decision.
+3. **Clear the vault.** The bank bonus is multiplied by everything Foundry built, so a
+   full vault pays many times a cold one.
+4. **Which arms Foundry again** — its bumpers light for 12 hits at ×5, and those hits
+   recharge the vault. The loop closes.
+
+Neither board can run this alone, which is what makes the pass structural rather than
+optional. The wiring lives in the board data (`links`), not in the rules, so a new
+cross-board relationship is a table entry rather than a branch — and `core/validate.lua`
+rejects a link naming a board, meter or target that does not exist, because a typo here
+would be a mechanic that silently never fires.
 
 ## 8. Failure and rescue **DECIDED**
 

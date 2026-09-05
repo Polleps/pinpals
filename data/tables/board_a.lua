@@ -156,6 +156,13 @@ return {
   -- §5 The link.
   -- The mouth sits directly above the ramp exit, so clearing the gate is the
   -- pass. The right orbit is the plunger lane and the way back down.
+  -- §7 Cross-board state. Foundry is the charging board: the chaos here is
+  -- worth little on its own (24 points/s) but it fills the vault waiting on
+  -- Glasshouse. You play A to prepare B.
+  links = {
+    { when = "bumper", charges = { board = "b", meter = "vault" } },
+  },
+
   tube  = { mouth = { x = 215, y = 168, r = 14 }, to = "b" },
   entry = { x = 46,  y = 104, dir = { x = 0.32, y = 1 } },
   serve = { x = 355, y = 560, dir = { x = 0, y = -1 } },

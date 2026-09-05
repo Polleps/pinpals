@@ -39,6 +39,12 @@ function M.new(boards)
     local b = {
       id = id, flippers = { left = false, right = false },
       devices = {}, targets = {}, banks = {},
+      -- §7 cross-board state. `meters` is what the OTHER board has been
+      -- filling up here and this board can cash; `lit` is what the other
+      -- board has switched on here. Both are plain numbers so the whole
+      -- state stays serializable (§5.2), and both survive the ball leaving
+      -- -- that is the point: the dormant board keeps what you built.
+      meters = {}, lit = {}, links = def.links or {},
     }
     for _, d in ipairs(def.devices) do
       -- `commanded` is a rule-level fact: what the operator has asked for.
@@ -53,7 +59,9 @@ function M.new(boards)
       local bank = b.banks[t.bank]
       if not bank then bank = { members = {}, cleared = 0 }; b.banks[t.bank] = bank end
       bank.members[#bank.members+1] = i
+      b.meters[t.bank] = b.meters[t.bank] or 0
     end
+    b.lit.bumpers = 0
     s.boards[id] = b
   end
   return s
@@ -137,6 +145,29 @@ function M.update(s)
   return cmds
 end
 
+--- Fire every link on `from` whose trigger matches, against the whole state.
+--- Links are board data (§5.3), so adding a new cross-board relationship is a
+--- table entry rather than a branch in here.
+---@param s table
+---@param from string board id the trigger happened on
+---@param trigger string "bumper" | "bank:<name>"
+local function fire_links(s, from, trigger)
+  for _, l in ipairs(s.boards[from].links or {}) do
+    if l.when == trigger then
+      if l.charges then
+        local dest = s.boards[l.charges.board]
+        local m = l.charges.meter
+        if dest and dest.meters[m] then
+          dest.meters[m] = math.min(C.CHARGE_MAX, dest.meters[m] + 1)
+        end
+      elseif l.lights then
+        local dest = s.boards[l.lights.board]
+        if dest then dest.lit[l.lights.what] = C.LIT_HITS end
+      end
+    end
+  end
+end
+
 --- Fold events reported by sim/ back into the rules.
 ---@param s table
 ---@param events table[]
@@ -180,9 +211,17 @@ function M.consume(s, events)
           t.lit = true
           local bank = board.banks[t.bank]
           if bank and M.bank_complete(board, bank) then
-            total = total + score.award(s.stats, "bank")
+            -- §7's payoff. The bonus is scaled by everything the partner
+            -- board charged into this meter, so clearing a vault Foundry has
+            -- been filling is worth many times clearing a cold one -- which
+            -- is what makes "play A to prepare B" a real sentence rather
+            -- than a description of nothing.
+            local charge = board.meters[t.bank] or 0
+            total = total + score.award(s.stats, "bank", 1 + charge)
+            board.meters[t.bank] = 0
             bank.cleared = bank.cleared + 1
             for _, mi in ipairs(bank.members) do board.targets[mi].lit = false end
+            fire_links(s, ev.board, "bank:" .. t.bank)
           end
         end
         s.last_award = {
@@ -191,10 +230,19 @@ function M.consume(s, events)
       end
 
     elseif ev.kind == "bumper" and s.phase == "play" then
+      local board = s.boards[ev.board]
+      -- A lit bumper is the payoff coming home: Glasshouse cleared its vault,
+      -- and Foundry's cheap chaos is briefly worth LIT_MULT times as much.
+      local boost = 1
+      if (board.lit.bumpers or 0) > 0 then
+        boost = C.LIT_MULT
+        board.lit.bumpers = board.lit.bumpers - 1
+      end
       s.last_award = {
-        kind = "bumper", value = score.award(s.stats, "bumper"),
-        board = ev.board, x = ev.x, y = ev.y,
+        kind = "bumper", value = score.award(s.stats, "bumper", boost),
+        board = ev.board, x = ev.x, y = ev.y, boosted = boost > 1,
       }
+      fire_links(s, ev.board, "bumper")
 
     elseif ev.kind == "drain" and s.phase == "play" then
       release_flippers(s)

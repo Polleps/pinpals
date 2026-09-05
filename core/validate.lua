@@ -62,6 +62,22 @@ function M.board(b)
     end
   end
 
+  -- §7 cross-board wiring. Validated here because a typo'd board id or meter
+  -- name would otherwise be a mechanic that silently never fires -- the worst
+  -- possible failure for something the player is supposed to be building
+  -- toward across two boards.
+  for i, l in ipairs(b.links or {}) do
+    if type(l.when) ~= "string" then
+      e[#e+1] = ("links[%d].when: expected a string"):format(i)
+    end
+    local effect = l.charges or l.lights
+    if not effect then
+      e[#e+1] = ("links[%d]: expected `charges` or `lights`"):format(i)
+    elseif type(effect.board) ~= "string" then
+      e[#e+1] = ("links[%d]: effect needs a target board id"):format(i)
+    end
+  end
+
   -- Exactly one left and one right flipper.
   local sides = {}
   if type(b.flippers) ~= "table" or #b.flippers ~= 2 then
@@ -168,6 +184,39 @@ function M.board(b)
   return #e == 0, e
 end
 
+--- Link targets, which need the whole board set: a link naming a board that
+--- does not exist, a meter no bank will ever cash, or a `lights` target the
+--- destination board has none of, is a dead mechanic.
+---@param boards table<string, table>
+---@param errs string[]
+local function check_links(boards, errs)
+  for id, b in pairs(boards) do
+    for i, l in ipairs(b.links or {}) do
+      local effect = l.charges or l.lights
+      if effect and type(effect.board) == "string" then
+        local dest = boards[effect.board]
+        if not dest then
+          errs[#errs+1] = ("board %s links[%d]: no such board '%s'")
+            :format(id, i, effect.board)
+        elseif l.charges then
+          -- A meter is cashed by a bank of the same name on the destination.
+          local found = false
+          for _, t in ipairs(dest.targets or {}) do
+            if t.bank == effect.meter then found = true end
+          end
+          if not found then
+            errs[#errs+1] = ("board %s links[%d]: board %s has no '%s' bank to cash the charge")
+              :format(id, i, effect.board, tostring(effect.meter))
+          end
+        elseif l.lights and effect.what == "bumpers" and #(dest.bumpers or {}) == 0 then
+          errs[#errs+1] = ("board %s links[%d]: board %s has no bumpers to light")
+            :format(id, i, effect.board)
+        end
+      end
+    end
+  end
+end
+
 --- Validate a full board set and the wiring between them.
 ---@param boards table<string, table>
 ---@return boolean ok, string[] errors
@@ -197,6 +246,7 @@ function M.set(boards)
       end
     end
   end
+  check_links(boards, e)
   return #e == 0, e
 end
 

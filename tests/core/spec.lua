@@ -437,4 +437,108 @@ return function(H)
     end)
   end)
 
+  ---------------------------------------------------------------------------
+  -- §7 Cross-board state. "You play A to prepare B, then pass and cash in --
+  -- which arms A again."
+  ---------------------------------------------------------------------------
+  describe("cross-board state", function()
+    local score = require("core.score")
+
+    local function bump(s, n)
+      for _ = 1, n do
+        state.consume(s, { { kind = "bumper", board = "a", index = 1, x = 0, y = 0 } })
+      end
+    end
+
+    local function clear_vault(s)
+      for i = 1, #boards.b.targets do
+        state.consume(s, { { kind = "target", board = "b", index = i, x = 0, y = 0 } })
+      end
+    end
+
+    it("charges the partner board, not the one being played", function()
+      -- The whole mechanic: Foundry's chaos is worth little here and fills
+      -- something over there.
+      local s = state.new(boards)
+      s.phase = "play"
+      bump(s, 3)
+      A.equal(3, s.boards.b.meters.vault, "Foundry's bumpers did not charge Glasshouse")
+      A.equal(nil, s.boards.a.meters.vault, "the charge landed on the wrong board")
+    end)
+
+    it("caps the charge, so grinding one board cannot be the whole game", function()
+      -- §5: passing must be tempting, not compulsory. The cap is what stops
+      -- "stay on Foundry forever" from dominating -- past it, Foundry pays
+      -- its own low rate and the only way to cash is to pass.
+      local s = state.new(boards)
+      s.phase = "play"
+      bump(s, C.CHARGE_MAX + 25)
+      A.equal(C.CHARGE_MAX, s.boards.b.meters.vault)
+    end)
+
+    it("pays the bank bonus scaled by what the partner board built", function()
+      local cold = state.new(boards)
+      cold.phase = "play"
+      clear_vault(cold)
+
+      local charged = state.new(boards)
+      charged.phase = "play"
+      bump(charged, C.CHARGE_MAX)
+      local before = charged.stats.score
+      clear_vault(charged)
+      local hot_bank = charged.stats.score - before
+
+      A.truthy(hot_bank > cold.stats.score * 4,
+        ("a fully charged vault paid %d against a cold %d: preparation is not paying")
+          :format(hot_bank, cold.stats.score))
+    end)
+
+    it("spends the charge when the vault is cashed", function()
+      local s = state.new(boards)
+      s.phase = "play"
+      bump(s, 5)
+      clear_vault(s)
+      A.equal(0, s.boards.b.meters.vault, "the vault kept its charge after paying out")
+    end)
+
+    it("lights the partner board's bumpers, closing the loop", function()
+      local s = state.new(boards)
+      s.phase = "play"
+      A.equal(0, s.boards.a.lit.bumpers)
+      clear_vault(s)
+      A.equal(C.LIT_HITS, s.boards.a.lit.bumpers,
+              "clearing Glasshouse's vault did not arm Foundry")
+    end)
+
+    it("pays more for a lit bumper, and spends the lighting", function()
+      local s = state.new(boards)
+      s.phase = "play"
+      clear_vault(s)
+      local before = s.stats.score
+      bump(s, 1)
+      local lit_value = s.stats.score - before
+      A.equal(C.SCORE_BUMPER * score.heat(0) * C.LIT_MULT, lit_value)
+      A.equal(C.LIT_HITS - 1, s.boards.a.lit.bumpers, "a lit hit was free")
+    end)
+
+    it("keeps cross-board state through a drain", function()
+      -- §7: "the dormant board keeps its state". If a drain wiped it, every
+      -- rally would start from nothing and there would be no reason to
+      -- prepare anything.
+      local s = state.new(boards)
+      s.phase = "play"
+      bump(s, 4)
+      clear_vault(s)
+      s.phase = "play"
+      state.consume(s, { { kind = "drain", board = "a" } })
+      A.equal(C.LIT_HITS, s.boards.a.lit.bumpers, "a drain unlit the bumpers")
+      -- The drain put the match into its drain phase, where nothing scores.
+      -- Serving the next ball is what resumes play, and the question is
+      -- whether the board still remembers what was built before the loss.
+      s.phase = "play"
+      bump(s, 2)
+      A.equal(2, s.boards.b.meters.vault, "the vault forgot its charge on a drain")
+    end)
+  end)
+
 end

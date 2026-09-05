@@ -51,11 +51,12 @@ local BASE = {
 --- What one scoring event is worth right now.
 ---@param kind "pass"|"bumper"|"target"|"bank"
 ---@param relay integer
+---@param boost? number cross-board multiplier on top of relay heat (§7)
 ---@return integer
-function M.value(kind, relay)
+function M.value(kind, relay, boost)
   local base = BASE[kind]
   if not base then return 0 end
-  return base * M.heat(relay)
+  return math.floor(base * M.heat(relay) * (boost or 1))
 end
 
 --- Award an event, and report what it was worth so app/ can float the number
@@ -69,8 +70,9 @@ end
 ---@param stats table
 ---@param kind "pass"|"bumper"|"target"|"bank"
 ---@return integer awarded
-function M.award(stats, kind)
-  local v = M.value(kind, stats.relay)
+---@param boost? number
+function M.award(stats, kind, boost)
+  local v = M.value(kind, stats.relay, boost)
   stats.score       = (stats.score or 0) + v
   stats.rally_score = (stats.rally_score or 0) + v
   if stats.rally_score > (stats.best_rally_score or 0) then

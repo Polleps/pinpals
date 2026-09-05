@@ -137,6 +137,14 @@ return {
     },
   },
 
+  -- §7 Cross-board state, the return half. Clearing the vault cashes the
+  -- charge Foundry built, and lights Foundry's bumpers on the way back -- so
+  -- arriving on a board you prepared feels like coming home to something.
+  -- The loop only closes if both players keep passing.
+  links = {
+    { when = "bank:vault", lights = { board = "a", what = "bumpers" } },
+  },
+
   tube  = { mouth = { x = 169, y = 168, r = 14 }, to = "a" },
   entry = { x = 338, y = 104, dir = { x = -0.32, y = 1 } },
   serve = { x = 45,  y = 560, dir = { x = 0, y = -1 } },

@@ -154,7 +154,7 @@ local function draw_incoming(def, u)
   lg.circle("fill", e.x, e.y, 4 + 3 * u)
 end
 
-local function draw_board(def, snap, prev, alpha, view, active, heat, incoming, tstates)
+local function draw_board(def, snap, prev, alpha, view, active, heat, incoming, bstate)
   local th = THEME[def.id]
   local dim = active and 1.0 or 0.45
 
@@ -182,22 +182,60 @@ local function draw_board(def, snap, prev, alpha, view, active, heat, incoming, 
   -- Bumpers. A struck bumper lights and swells for ~300ms: they are board A's
   -- declared character (prototype.md §4.1) and were previously indistinguishable
   -- from scenery whether or not the ball had just hit them.
+  local bumpers_lit = bstate and (bstate.lit.bumpers or 0) > 0
   for i, b in ipairs(def.bumpers or {}) do
     local pulse = fx and fx.hit_pulse(def.id, "bumper", i) or 0
     local r = b.r * (1 + 0.18 * pulse)
-    love.graphics.setColor(0.95 * dim, 0.85 * dim, 0.30 * dim, 0.85 + 0.15 * pulse)
-    love.graphics.setLineWidth(2 + 3 * pulse)
+    -- Lit means Glasshouse cleared its vault and these are briefly worth
+    -- LIT_MULT times as much. It has to be unmistakable from across a room,
+    -- so lit bumpers change colour rather than just brightening.
+    local cr, cg, cb = 0.95, 0.85, 0.30
+    if bumpers_lit then cr, cg, cb = 1.0, 0.45, 0.72 end
+    love.graphics.setColor(cr * dim, cg * dim, cb * dim, 0.85 + 0.15 * pulse)
+    love.graphics.setLineWidth((bumpers_lit and 3 or 2) + 3 * pulse)
     love.graphics.circle("line", b.x, b.y, r)
-    love.graphics.setColor(0.95 * dim, 0.85 * dim, 0.30 * dim, 0.18 + 0.62 * pulse)
+    love.graphics.setColor(cr * dim, cg * dim, cb * dim,
+                           (bumpers_lit and 0.34 or 0.18) + 0.62 * pulse)
     love.graphics.circle("fill", b.x, b.y, r)
     love.graphics.setLineWidth(3)
+  end
+  if bumpers_lit then
+    love.graphics.setFont(fonts.small)
+    love.graphics.setColor(1, 0.45, 0.72, 0.9)
+    love.graphics.printf(("BUMPERS LIT x%d  (%d)"):format(C.LIT_MULT, bstate.lit.bumpers),
+                         0, 108, def.size.w, "center")
+  end
+
+  -- §7 cross-board state, drawn on the board it belongs to so it is visible
+  -- on the dormant panel too -- the whole point being that what you built
+  -- over there is still there when you arrive.
+  if bstate then
+    -- The vault charge, above the bank it will multiply.
+    for name, level in pairs(bstate.meters or {}) do
+      if level > 0 then
+        local bank = bstate.banks[name]
+        local first = bank and def.targets[bank.members[1]]
+        if first then
+          local u = level / C.CHARGE_MAX
+          local w = 96
+          local bx, by = first.x - 8, first.y - 34
+          love.graphics.setColor(1, 1, 1, 0.12)
+          love.graphics.rectangle("fill", bx, by, w, 7, 3)
+          love.graphics.setColor(lerp(0.5, 1, u), lerp(0.9, 0.55, u), lerp(0.7, 0.15, u), 0.95)
+          love.graphics.rectangle("fill", bx, by, w * u, 7, 3)
+          love.graphics.setFont(fonts.small)
+          love.graphics.setColor(1, 1, 1, 0.55)
+          love.graphics.print(("%s x%d"):format(name:upper(), 1 + level), bx, by - 15)
+        end
+      end
+    end
   end
 
   -- Targets. A lit one has been hit and is waiting for the rest of its bank;
   -- the difference has to be visible at a glance or the bank is a mechanic
   -- only the scoreboard knows about.
   for i, t in ipairs(def.targets or {}) do
-    local tstate = tstates and tstates[i]
+    local tstate = bstate and bstate.targets[i]
     local lit    = tstate and tstate.lit
     local pulse  = fx and fx.hit_pulse(def.id, "target", i) or 0
     local corners = geo.rect_corners(t)
@@ -492,8 +530,7 @@ function M.draw(match, legend, debug_on)
   for _, id in ipairs({ "a", "b" }) do
     draw_board(match.defs[id], match.cur[id], match.prev[id], match.alpha,
                M.view[id], id == state.active, heat,
-               (t and id == t.to) and incoming_u or nil,
-               state.boards[id] and state.boards[id].targets)
+               (t and id == t.to) and incoming_u or nil, state.boards[id])
   end
   if state.phase == "transit" then draw_transit(state, match.defs) end
   HA = M.hud_a

@@ -66,6 +66,15 @@ C.SCORE_PASS     = 1000        -- awarded per crossing, at the new heat
 C.SCORE_BUMPER   = 50          -- chaos: cheap, frequent, not aimed
 C.SCORE_TARGET   = 250         -- precision: you meant to hit this
 C.SCORE_BANK     = 2500        -- clearing a whole bank, before the multiplier
+
+-- §7 Cross-board state: completing something on A arms something on B.
+-- Foundry's bumpers charge Glasshouse's vault; clearing the vault lights
+-- Foundry's bumpers. Neither board can run the loop alone, which is what
+-- makes the pass structural rather than optional. The wiring itself lives in
+-- the board data (§5.3), not here -- these are only its magnitudes.
+C.CHARGE_MAX     = 10          -- a vault charge worth x11 on the bank bonus
+C.LIT_HITS       = 12          -- bumper hits granted by clearing a vault
+C.LIT_MULT       = 5           -- what a lit bumper pays, against an unlit one
 -- There is deliberately no bumper cooldown constant. One was written, then
 -- measured away: see the note in sim/board.lua:_begin and the numbers in
 -- tests/probe_scoring.lua.
