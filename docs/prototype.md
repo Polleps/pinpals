@@ -31,13 +31,33 @@ something an agent can act on.
 
 ## 1. What is in it
 
-Exactly §14's list, and nothing else. No scoring, no modes, no cross-board unlocks.
+§14's list, plus what the 2026-09-06 overnight pass added. §14 asked for no scoring,
+no modes and no cross-board unlocks; there are now all three, because "it works but
+it isn't fun" turned out to be mostly about the things §14 deferred.
+
+The original list:
 
 - Two crude, non-mirrored boards; one ball; one screen; two players
 - One tube each way, with the transit beat animated between both boards (§5, §10)
 - Two operator devices per board, both persistent states with real trade-offs (§6)
 - Roles implicit in ball position, no role UI (§4)
-- A rally counter, which is the instrument for the question the prototype asks
+
+Added since:
+
+- **Sound.** Eleven voices, synthesized at load, no asset files. Relay heat pitches
+  the whole kit up (§10).
+- **Impact feedback.** Rings, sparks, lit bumpers, a ball trail, restrained shake —
+  driven by the same event stream as the audio, so a hit looks and sounds like one hit.
+- **Scoring on relay heat (§9).** The multiplier is the crossing count. A ten-crossing
+  rally is worth 5.5x the same ten passes spread across ten drains.
+- **Content on both boards.** Foundry's bumper cluster now sits where the ball
+  actually goes; Glasshouse has a target bank. Both boards have a second shot.
+- **Cross-board state (§7).** Foundry's bumpers charge Glasshouse's vault; clearing
+  the vault lights Foundry's bumpers. See design.md §7.1.
+- **A session log.** Quitting writes rally distributions, drain locations and operator
+  duty cycles, plus the intent stream.
+
+Still absent: team lives, a session ending, purgatory rescue, multiball, any meta.
 
 The architecture is the one in `technical-choices.md` §5, enforced by a gate rather
 than by good intentions: `core/` is pure Lua, `sim/` may touch `love.physics` and
@@ -141,7 +161,7 @@ All of them are visible in the data. Four checks, no physics:
 |---|---|
 | **bowl** | a wall vertex lower than everything it joins. A peak sheds the ball and is fine, so this is not "chains must be monotone", it is "chains must never turn back up". Vertices are keyed by position, so a bowl formed *between* two polylines is caught the same way as one inside a chain. |
 | **flipper-jam** | wall geometry inside a flipper's swept arc — either it jams the flipper, or it leaves a notch behind the pivot that the flipper rotates away from. |
-| **wedge** | any two surfaces closer than the ball is wide: wall/wall, bumper/wall, bumper/bumper. Proximity, not intersection — board B's rails never crossed, they converged to 10.8px. |
+| **wedge** | any two surfaces closer than the ball is wide: wall/wall, bumper/wall, bumper/bumper, target/wall, target/target. Proximity, not intersection — board B's rails never crossed, they converged to 10.8px. The target-to-target check was added after three standups authored 33px apart at 34px wide overlapped into a single bar; only a screenshot caught it. |
 | **gate-leaks / gate-blocks / post-misses / post-stuck-out** | devices that do not do what they claim: a gate whose closed tip does not reach a wall, or whose open position leaves less than a ball of clearance; a post that does not span the drain gap, or does not retract below the drain line. |
 
 Reintroducing the bug from playtest 1 gives, instantly:
@@ -169,15 +189,20 @@ covered by the two stuck-ball tests in `tests/sim/spec.lua`.
 These answer `design.md` §13 questions **provisionally**, for the prototype only.
 They are choices to react to, not decisions.
 
-1. **Board identities (§13.1).** Foundry is chaotic and forgiving — a bumper
-   cluster keeps the ball alive but crowds the aim. Glasshouse is clean and fast,
-   with no bumpers and a wider flipper gap: easy to aim the pass, punishing to sit
-   on. Their ramps are on opposite sides so they do not reward the same muscle
-   memory. This is a guess with a shape, not an answer.
+1. ~~**Board identities (§13.1).**~~ **Answered and measured — see design.md §7.**
+   Foundry is where a rally survives (12.19s mean ball life, 24 points/s);
+   Glasshouse is where it pays (9.05s, 351 points/s). The old text here —
+   "Foundry forgiving, Glasshouse punishing to sit on" — was never measured and
+   was backwards: Glasshouse had the *higher* survival rate of the two, and
+   Foundry drained more often per second despite a narrower gap.
 2. **Tube count (§13.3).** One each way, per §14.
-3. **Operator resource model (§13.4).** Neither cooldowns nor a meter. The
-   devices' own trade-offs are the restraint, which is worth testing before adding
-   any economy on top.
+3. **Operator resource model (§13.4).** Still neither cooldowns nor a meter. The
+   devices' own trade-offs are the restraint, and the post's is now real rather than
+   nominal (§2). Worth testing before adding any economy on top.
+3a. **Session structure (§13.2) is still open**, and is now the largest unanswered
+   question in the document. There is a score, and nothing that ends. No team lives,
+   no goal, no run. Everything else built overnight assumes an endless session, so
+   this is the next call with real consequences.
 4. **Rescue (§13.5).** Not built. A drain re-serves on the board that lost it
    after ~0.9s. Purgatory rescue is a second mechanic on top of the one being
    tested, and §14 does not ask for it.
@@ -191,10 +216,9 @@ They are choices to react to, not decisions.
 
 ## 5. Known soft spots
 
-- **The post may be too absolute.** Blocking 100% of pass shots is a clean,
-  legible trade, but while it is up the flipper player has nothing productive to
-  do, which brushes against pillar 1 ("nobody waits"). Narrowing it, or letting
-  flat shots under it, is the obvious first tuning knob.
+- ~~The post may be too absolute~~ **Fixed, and it was worse than this said.**
+  It blocked 100% of pass shots *and* 100% of drains — a pause button rather than a
+  trade. Lowered below the flipper pivots (§2); the cost is now real and asymmetric.
 - ~~The pass may be too easy~~ **It is not.** Measured from a ball that actually
   arrives out of the tube, with a player who predicts contact rather than flipping on
   a fixed cue, the peak rates are 63% (Foundry) and 85% (Glasshouse) — but the
@@ -211,16 +235,27 @@ They are choices to react to, not decisions.
 
   Not the bumper cluster: removing it raises Foundry's peak to 72% and leaves the
   window at 20ms. What actually sets the window is still open.
-- **Glasshouse is thin.** Two bare rails is not yet a character, just an absence
-  of one. It needs whatever answers §13.1 properly.
-- **The upper playfields are empty.** Both boards are mostly a ramp plus space.
-  Fine for testing the rally, but there is nothing to do while you hold the ball.
-- **No audio.** §10 wants audio doing the warning work; the module is switched off.
+- ~~Glasshouse is thin~~ **It has a target bank and a measured identity** (§4.1,
+  design.md §7). One of its two bare rails became the bank; the other still feeds it.
+- ~~The upper playfields are empty~~ **They were not empty, they were unreachable.**
+  A sweep of 50 flipper contact points found board A could reach exactly one place:
+  the ramp. Nothing above y=550 outside that channel was reachable from any contact
+  point on either flipper, and all three bumpers measured zero. Raising the ramp
+  mouth opened the orbits; both boards now have a second shot.
+- ~~No audio~~ **Eleven synthesized voices**, pitched by relay heat (§1).
+- **Foundry's receiving window is ~20ms**, about one 60fps frame, against
+  Glasshouse's 50ms. Ruled out: the bumper cluster. Still open: what does set it.
+  This is the most likely thing to make the game feel unfair at the keyboard.
+- **Nothing ends.** There is a score and no session structure at all (§4.3a). Every
+  system built overnight assumes an endless run.
+- **None of the overnight work has been played.** Every number in this document
+  comes from a headless probe. They say the systems function; they cannot say the
+  game is fun.
 - **The §7 lint and static-analysis gates are live.** `luarocks` had been broken
   by a Homebrew `lua` bump to 5.5 that left its shebang pointing at a deleted
   `lua5.4`; upgrading it to 3.13 fixed that. `luacheck` and `lua-language-server`
   are installed and wired into `make check` as hard gates, configured by
-  `.luacheckrc` and `.luarc.json`. Both are clean across all 18 files.
+  `.luacheckrc` and `.luarc.json`. Both are clean across all 29 files.
 - `busted` is installable again (`luarocks install --local busted`, and it is
   installed) but nothing uses it yet: `tests/harness.lua` stays the
   dependency-free stand-in with the same API, so `make test-core` needs no rocks.
@@ -232,3 +267,22 @@ They are choices to react to, not decisions.
 Play it. The prototype exists to answer one thing, and only a human at the keyboard
 can: **does the rally feel good, and does the tube transit read clearly?** If yes,
 everything in `design.md` is worth building. If not, nothing else saves it.
+
+Nothing in §3 or in the 2026-09-06 overnight pass changes that. Those measurements
+say the systems work — the pass is makeable, the bumpers are reachable, the loop
+closes, the post costs something. Whether any of it is *fun* is not a property a
+headless harness can observe, and no amount of it substitutes for ten minutes at the
+keyboard.
+
+Three things specifically worth attending to while playing, because they are the
+places the measurements point at and cannot settle:
+
+1. **Receiving on Foundry.** ~20ms of usable timing, about one frame. Does it feel
+   like a skill or like a coin flip?
+2. **The post.** It now costs the pass on one flipper and barely touches the other,
+   depending on the board. Does that read as tactical, or just as inconsistent?
+3. **The cross-board loop.** Charge Foundry, pass, clear the vault, come home to lit
+   bumpers. Does that arc survive contact with two people actually shouting at each
+   other, or is it bookkeeping happening somewhere off-screen?
+
+Quit with `Esc` and the session log will have the numbers for whatever you felt.
