@@ -96,7 +96,7 @@ Blocks 20/32 → 0/32 of pass shots. Legible, but it parks the flipper player, w
 brushes pillar 1. Try narrowing it / letting flat shots under. Target: a number
 meaningfully above 0 that still makes the guard a real trade. Measure both.
 
-### 9. Pass difficulty off a moving ball  ·  TODO
+### 9. Pass difficulty off a moving ball  ·  DONE (e940adb)
 
 ~60% is measured off a static, perfectly timed flip, which is not the game. Measure
 from realistic incoming trajectories, then tune.
@@ -112,6 +112,15 @@ turns Polle's morning play into a measurement instead of an impression.
 calls that have since been made and measured. The doc has been patched section by
 section as the night went on; it needs one honest pass to describe what is actually
 there, so Polle reads the game rather than its history.
+
+### 14. What sets Foundry's 20ms timing window?  ·  TODO
+
+Receiving on Foundry has a half-peak timing window of 20ms against Glasshouse's 50ms —
+about one 60fps frame. The obvious suspect was the bumper cluster randomising the ball
+on its way down; **ruled out**, removing it raises the peak 63% → 72% and leaves the
+window at 20ms. Candidates remaining: the entry point's position relative to the ramp,
+the descent path down the left orbit, the ramp mouth's flare width. Worth finding,
+because 20ms is close to the floor of what a person can time consistently.
 
 ### 11+ Think of other ways to improve the game  ·  TODO
 
@@ -416,5 +425,40 @@ helper, which starts the ball 15.9px clear rather than 10.6px; that's enough for
 bounce before the flip lands, washing the effect out entirely (13/28 vs 14/28, against
 58% and 40% from a ball actually resting on the flipper). Those two harnesses disagree,
 which is now written down where the next agent will see it.
+
+### Iteration 9 — the pass is not too easy · `e940adb`
+
+`prototype.md` worried the pass was too easy at ~60%, noting that number came from a
+static perfectly-timed flip. Measured from a ball that actually arrives out of the tube
+and has to be caught:
+
+| board | peak pass | window at ≥ half peak |
+|---|---|---|
+| Foundry | 63% | **20ms** |
+| Glasshouse | 85% | 50ms |
+
+A 60fps frame is 17ms, so receiving on Foundry gives the player about **one frame** of
+usable information. That's a concern in the opposite direction from the one the doc
+raised. The peak rate was never the interesting number — a 90% shot you can only hit
+within one frame is not an easy shot.
+
+**Three harness rewrites, each of which gave a confident wrong answer first:**
+
+1. **Trials that weren't trials.** 28 "samples" with nothing varying but a 7-value
+   speed cycle, so every rate came out a multiple of 1/7 — 0%, 14%, 57%, 100%.
+2. **A timing axis that couldn't go early.** Triggering on a y-line means no amount of
+   negative "error" fires sooner than the line, so −80ms and 0ms were identical and I
+   nearly read that as a flat response.
+3. **A metronome instead of a player.** Flipping at a fixed delay while arrival speeds
+   varied randomly mistimes nearly every ball by construction, and reported 96% of
+   received balls draining. That said nothing about the game. The policy now predicts
+   contact from live position and velocity, which is what a person does.
+
+Foundry's narrow window is **not** the bumper cluster — the obvious suspect, ruled out
+by measurement. Filed as item 14.
+
+Also: the cross-board link validator from iteration 7 caught my bumpers-removed
+experiment before it ran, refusing a board set where Glasshouse lights a cluster
+Foundry no longer has. Nice to have that confirmed by accident.
 
 *(iterations append here)*
