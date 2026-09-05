@@ -72,7 +72,7 @@ reads as a pause.
 tested), readout in `app/`. Heat rises per crossing, resets on drain — a risk curve
 generated entirely by cooperation. Answers §13.2 partially; write it up PROVISIONAL.
 
-### 5. Board A upper playfield has nothing in it  ·  TODO
+### 5. Board A upper playfield has nothing in it  ·  DONE (d85964a)
 
 Give the flipper player something to shoot while holding the ball, so not passing is a
 real choice (§5: "passing must be tempting, not compulsory"). Data-only where possible;
@@ -111,7 +111,7 @@ turns Polle's morning play into a measurement instead of an impression.
 Polle's addition. If the backlog runs out before the night does, keep going: think of
 cool things to add or improve, document them, add them here.
 
-### 12. Board A's bumper cluster is nearly unreachable  ·  TODO
+### 12. Board A's bumper cluster is nearly unreachable  ·  DONE (d85964a — same bug as 5)
 
 Found while measuring impulses for item 1: **1 bumper contact in 240 seconds** of
 random play, against 23,088 wall contacts. `prototype.md` §4.1 calls the cluster
@@ -244,5 +244,46 @@ something the speed multiplier already gives.
 **Still unanswered and now more visible:** bumpers are the only shot content in the
 game, and item 12 says the ball reaches them once per 240s. The multiplier currently
 has almost nothing to multiply. Items 5 and 6 are where that gets fixed.
+
+### Iteration 5 — board A had exactly one shot · `d85964a`
+
+Items 5 and 12 turned out to be the same bug, and it is worse than either
+description. A sweep of 50 flipper contact points across both flippers:
+
+    pass 62%   drain 38%   left orbit 0%   right orbit 0%
+
+**Nothing above y=550 outside the ramp channel was reachable by any shot from any
+contact point on either flipper.** The upper playfield was not empty — it was
+unreachable, and adding targets to it would have added nothing. All three bumpers
+measured reach 0. Foundry's entire declared character did not exist at the table.
+
+The cause was geometric: the ramp mouth sat 88px above the flipper pivots and
+intercepted every shot before one could travel sideways. The outer shell already
+forms a complete orbit — the serve runs it every time — but no flipper shot could
+enter it.
+
+| mouth y | pass | left orbit | right orbit |
+|---|---|---|---|
+| 600 (shipped) | 62% | 0% | 0% |
+| 570 | 58% | 6% | 4% |
+| **540** | **52%** | **14%** | **10%** |
+| 510 | 42% | 42% | 16% |
+
+Moving the ramp alone did not fix the bumpers — the orbit hugs the wall at x=24–72
+and the cluster sat at x=95–140, just inside the lane and outside the ball's path.
+Repositioned against the measured lane: **0.60 hits/s against 0.017, a 36×**, with
+all three now scoring where two previously never fired at all.
+
+**Methodology note worth keeping.** My first bumper sweep, on one seed, showed 80 →
+129 hits from a 4px radius change. That was noise wearing the costume of a result.
+Re-run averaged over 6 seeds, the two radii are indistinguishable (72.2 vs 74.7, sd
+~7). Pinball is chaotic enough that single-run layout tuning measures nothing —
+`tests/probe_reach.lua` now averages by default.
+
+**And a correction to my own work.** The probe first reported 10% of shots stuck.
+That was the probe holding the flipper up for the whole 6s trace, which parks it out
+of the way and leaves a notch at the pivot no ball can escape. With a realistic
+press-and-release it is 0%. The geometry gate was right and my instrument was wrong
+— worth remembering before trusting the next number it produces.
 
 *(iterations append here)*
