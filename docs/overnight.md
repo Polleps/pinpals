@@ -133,10 +133,17 @@ position.
 down the left orbit, the ramp mouth's flare width. Worth finding — 20ms is close to
 the floor of what a person can time consistently.
 
-### 11+ Think of other ways to improve the game  ·  TODO
+### 11+ Think of other ways to improve the game  ·  IN PROGRESS
 
 Polle's addition. If the backlog runs out before the night does, keep going: think of
 cool things to add or improve, document them, add them here.
+
+- **Purgatory rescue (§8)** · DONE (98bb9c7). Picked because it was the largest gap
+  between what `design.md` marks DECIDED and what existed.
+- **Session structure (§13.2)** · NOT ATTEMPTED, deliberately. There is a score and
+  nothing that ends. It is the biggest open question left, and it is also the one where
+  a wrong guess costs the most: team lives, run length and whether there is an ending
+  at all determine the shape of everything above them. Polle should make this call.
 
 ### 12. Board A's bumper cluster is nearly unreachable  ·  DONE (d85964a — same bug as 5)
 
@@ -526,5 +533,37 @@ On item 14, two suspects eliminated cleanly (bumpers, drain gap) plus a methodol
 check: negative leads score 0% on both boards, so Foundry's peak isn't sitting off the
 edge of a truncated sweep. The band is 5–25ms vs 15–70ms; the width is what's
 unexplained, not the position.
+
+### Iteration 12 — purgatory rescue · `98bb9c7`
+
+Picked from item 11 because it was the largest gap between what `design.md` marks
+**DECIDED** and what actually existed. §8 calls it "the best feeling co-op can produce"
+and it wasn't there at all: a drain ended the ball, the rally, and everything the rally
+was worth, instantly, with nothing anyone could do.
+
+Now a drained ball hangs for 1.9s and the **partner** can pull it back by raising the
+post on the board that lost it. Nothing is lost until the window expires — relay, rally
+score and the drain counter all stay untouched while it hangs, so a rescue costs the
+team nothing they'd already earned.
+
+§13.5 asked where the rescue should live. Answered provisionally: **the post the
+operator already has.** No new device, no new binding — and it can't have been held
+already, because a raised post stops 100% of drains, so if the ball drained the post
+was down. Reaching for it is always a real action inside the window.
+
+**And it costs.** §6.2 says an action that's always correct makes the operator a
+button-presser, and a free rescue is exactly that. A rescue spends every vault charge on
+both boards — the cross-board preparation from iteration 7. *Keep the rally, or keep the
+preparation?*, decided in under two seconds while being shouted at. The HUD states the
+cost before you commit.
+
+Audio moved with it: the drain sound no longer plays when the ball crosses the line,
+because telling the players it's over while they still have 1.9s to prove otherwise is a
+lie. A peril sound plays instead; the loss lands when the window closes.
+
+**Deliberately not attempted: session structure (§13.2).** There's a score and nothing
+that ends. It's the biggest open question left and the one where a wrong guess costs
+most — team lives, run length and whether there's an ending at all determine the shape
+of everything above them. That's Polle's call, not mine.
 
 *(iterations append here)*
