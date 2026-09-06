@@ -679,6 +679,55 @@ return function(H)
     end)
   end)
 
+  describe("everything running at once", function()
+    it("holds its invariants through a minute of random play", function()
+      -- Scoring, cross-board meters, purgatory rescue and the objective
+      -- readout are each tested alone. This is the only test that runs them
+      -- against each other for a sustained stretch, which is where the bugs
+      -- that survive unit tests live. tests/probe_soak.lua is the same thing
+      -- at ten minutes, for when something here starts flickering.
+      local objective = require("core.objective")
+      local names = {}
+      for id, d in pairs(boards) do names[id] = d.name end
+      math.randomseed(24601)
+      local m = Match.new(boards)
+      for i = 1, 60 * C.TICK_HZ do
+        if i % 22 == 0 then
+          local st = m.state
+          for _, b in pairs(st.boards) do
+            if math.random() < 0.3 then b.devices.gate.commanded = math.random() < 0.6 end
+            if math.random() < 0.25 then b.devices.post.commanded = math.random() < 0.4 end
+          end
+          local act = st.boards[st.active]
+          act.flippers.left  = math.random() < 0.4
+          act.flippers.right = math.random() < 0.4
+        end
+        m:run(1)
+        local st = m.state
+        local balls = 0
+        for _, b in pairs(m.boards) do if b.ball then balls = balls + 1 end end
+        if st.phase == "play" then
+          A.equal(1, balls, "phase play with the wrong ball count at tick " .. i)
+        else
+          A.truthy(balls <= 1, "more than one ball at tick " .. i)
+        end
+        A.truthy(st.stats.rally_score <= st.stats.score, "rally outgrew the session")
+        for id, b in pairs(st.boards) do
+          for name, v in pairs(b.meters) do
+            A.truthy(v >= 0 and v <= C.CHARGE_MAX,
+                     ("%s meter %s out of range: %d"):format(id, name, v))
+          end
+          A.truthy((b.lit.bumpers or 0) >= 0 and (b.lit.bumpers or 0) <= C.LIT_HITS,
+                   id .. " lit counter out of range")
+        end
+        local o = objective.current(st, names)
+        A.truthy(o and o.text and #o.text > 0, "no objective at tick " .. i)
+        if i % 2000 == 0 then m:drain_events() end
+      end
+      A.truthy(#m.feed <= 96, "the feed grew past its cap: " .. #m.feed)
+    end)
+  end)
+
   ---------------------------------------------------------------------------
   -- Impact events. Presentation only, but they are a contract app/ relies on
   -- and the threshold behind them is the difference between a set of hits and

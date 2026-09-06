@@ -589,6 +589,36 @@ return function(H)
       A.equal(1, s.stats.rescues)
     end)
 
+    it("does not rescue for free from a post that was already up", function()
+      -- The rescue must be an action taken inside the window, not a state
+      -- that happens to be true when the ball arrives in it. A 10-minute
+      -- soak of random play with the old rule produced 29 rescues against 1
+      -- drain: the operator could idle with the post up and never lose a
+      -- ball. Releasing and re-pressing still works -- that is an action.
+      local s = state.new(boards)
+      s.phase = "play"
+      s.boards[s.active].devices.post.commanded = true
+      state.consume(s, { { kind = "drain", board = s.active } })
+      run(s, C.PURGATORY_TIME + 0.05)
+      A.equal("drain", s.phase, "a post left up rescued the ball by itself")
+      A.equal(0, s.stats.rescues)
+    end)
+
+    it("rearms when the operator releases and presses again", function()
+      local s = state.new(boards)
+      s.phase = "play"
+      local post = s.boards[s.active].devices.post
+      post.commanded = true
+      state.consume(s, { { kind = "drain", board = s.active } })
+      run(s, 0.1)
+      post.commanded = false                          -- release: arms it
+      run(s, 0.1)
+      post.commanded = true                           -- press: the save
+      run(s, 0.1)
+      A.equal("serve", s.phase, "a deliberate re-press did not rescue")
+      A.equal(1, s.stats.rescues)
+    end)
+
     it("loses the ball if nobody acts", function()
       local s = to_purgatory(3)
       run(s, C.PURGATORY_TIME + 0.05)

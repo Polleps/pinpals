@@ -134,7 +134,11 @@ function M.update(s)
     s.timer = s.timer - dt
     local board = s.boards[s.active]
     local post  = board and board.devices.post
-    if post and post.commanded then
+    -- Releasing a post that was up at the moment of the drain arms the
+    -- rescue: the operator can still make the save, but they have to do
+    -- something to make it.
+    if post and not post.commanded then s.rescue_armed = true end
+    if post and post.commanded and s.rescue_armed then
       -- Rescued. The rally survives, which is the whole point: what the two
       -- of them built together is not thrown away by one bad bounce.
       --
@@ -150,6 +154,7 @@ function M.update(s)
         end
       end
       s.stats.rescues = s.stats.rescues + 1
+      s.rescue_armed  = nil
       s.rescue = { spent = spent }
       s.phase  = "serve"
       s.timer  = C.SERVE_DELAY
@@ -288,6 +293,14 @@ function M.consume(s, events)
       release_flippers(s)
       s.phase = "purgatory"
       s.timer = C.PURGATORY_TIME
+      -- The rescue has to be an ACTION taken inside the window, not a state
+      -- that happens to be true. A post already commanded when the ball
+      -- drained -- still travelling, or simply left up -- would otherwise
+      -- rescue for free, and a 10-minute soak of random play produced 29
+      -- rescues against 1 drain: the ball essentially never died. So arm on
+      -- the post being DOWN, and require a fresh raise.
+      local post = s.boards[s.active].devices.post
+      s.rescue_armed = not (post and post.commanded)
     end
   end
 end
