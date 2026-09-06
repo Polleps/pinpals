@@ -1110,4 +1110,136 @@ deadly, and outlane width is the knob. Foundry still has a visibly empty band be
 its bumper nest and its slingshots. Rollovers, drop targets, a spinner and a shooter
 lane are specified and unbuilt.
 
+## Iteration 30 — the outlane guard
+
+Each board now has **one barrier**, across the mouth of the left outlane or the right
+one, never both. The **operator** switches it with either flipper button, and the swap
+takes 300ms with neither lane sealed. It is a bumper, not a wall: restitution 1.30,
+tilted inward-and-down, so a ball that was about to be lost is thrown back across the
+playfield and scores. `design.md` §6.3 has the numbers; `tests/probe_guard.lua` produced
+them.
+
+This is §6.2's third bullet — "the wall that guards the outlane blocks a scoring shot" —
+which had been in the design doc since the beginning and was the last operator device
+still hypothetical.
+
+**Four things it cost a wrong answer to first.**
+
+*The probe read the velocity after the bounce.* The first version of `probe_guard`
+classified every guard contact by the ball's vertical velocity, to separate a save from
+a blocked shot. Contacts are reported from inside `world:update` and drained once it has
+returned, by which point the kick has already reversed the ball — so it reported 0.017
+blocks against 0.002 saves, the device exactly backwards, on a board where it in fact
+saves four times more often than it robs. The velocity has to be sampled *before* the
+step. CLAUDE.md rule 4 again, by a route nobody had used yet.
+
+*The plunger was doing the measuring.* Glasshouse's serve sits at x=48, a ball's width
+from the mouth of its left outlane, and a serve-only sample credited the left guard with
+tripling that board's ball life (4.77s → 15.13s). Started from the tube instead, the same
+guard is worth almost nothing there (0.1270 → 0.1267 drains/s). Both starts are now
+reported separately, because averaging them would have produced one number that was true
+of neither. CLAUDE.md rule 2.
+
+*"Did not drain" is not a save.* The obvious test — guard on, ball in, assert no drain —
+passes just as happily when the ball is *parked* on the bar six seconds later, which is
+exactly what a barrier placed deep inside a 29px shaft produces. The tests and the probe
+both classify three outcomes: escaped, drained, parked. Shipped geometry measures 40
+escapes, 0 parked, and exactly 1.00 guard contacts per ball, so it deflects in one hit
+rather than rattling.
+
+*The tilt has two jobs and one sign.* The bar's face throws a fast ball inward, and a
+ball too slow for Box2D to apply restitution to at all rolls down the same slope. Get the
+sign wrong and both go outward, into a pocket against the shell — the bar still stops the
+ball and still looks correct on screen. `core/geometry.lua` now refuses a guard whose
+inner end is not below its outer end, along with one that leaves a ball's width beside
+it, one whose two ends anchor to the same wall chain (a bar lying *along* the shell
+rather than across the lane, which every distance test passes), and one that does not
+retract below the drain line.
+
+**The side is a real decision, and that was not designed.** No board has a side that is
+right both for a served ball and for one arriving out of the tube. Foundry wants the
+right guard for a tube arrival (0.0761 → 0.0680 drains/s) and neither for a serve;
+Glasshouse's two columns disagree completely. The operator has to know the board *and*
+where the ball came in.
+
+**Still open.** Glasshouse's outlanes are barely where a tube arrival dies, so the guard
+is close to inert there for the ball that matters — either the device moves or that
+board's traffic does. And `probe_identity`, which produced the board identity tables,
+still runs with no guard deployed; both board headers now say so.
+
+## Iteration 31 — the guard is one save, not a lane
+
+The outlane guard now works **once**. The contact spends it: the bar retracts, both
+outlanes are live, and it cannot come back for 30 seconds. The side stays switchable while
+it recharges — that is the only decision left, so the board draws an empty outline filling
+up on the lane it will return to, and the panel counts down. `design.md` §6.3 has the
+numbers.
+
+This closes §6.2's oldest OPEN question ("do operator actions cost a resource? proposal:
+per-device cooldowns") for exactly one device. The gate and the post are still free.
+
+**"Works once" needed defining twice.** The bar takes 300ms to retract and can catch the
+ball again on the way down — the same save, arriving as a second contact. Without a guard
+against it that contact scores again *and* restarts the timer, so a lucky double-tap would
+have been indistinguishable from a fresh save. `core/state.lua` ignores any guard contact
+while the cooldown is running, and the soak asserts the cooldown never exceeds its own
+constant, which is what a re-arm would look like from the outside.
+
+**And it had to be spent in the physics, not just on the scoreboard.** Stopping core/ from
+*scoring* a spent guard leaves a bar still sitting across the lane saving balls for free.
+`sim/board.lua` sends both bars home whenever the cooldown is running, and the sim tests
+drop a ball into a spent guard's lane and require it to drain.
+
+**The scarcity is milder than the ratio suggests.** 30s against a 5–15s ball reads like a
+device that is absent most of the time. Measured, it is armed **61–76%** of ball time under
+random play, because it is only spent when a ball actually goes down the lane it is
+standing in, which is uncommon. Scarce, not gone.
+
+```
+  board       ball from      guard   armed   drains/s   if it never ran out
+  Foundry     the tube        right    71%     0.0794                0.0779
+  Glasshouse  the tube        left     75%     0.1201                0.1326
+  Glasshouse  the plunger     left      9%     0.1511                0.0994
+```
+
+**The 9% row is the plunger, again.** Glasshouse serves a ball's width from the mouth of
+its left outlane. Last iteration that showed up as a serve column that flattered the left
+guard so badly the two starts had to be reported separately; with a cooldown it is worse
+than a distortion, because the serve *spends the save* before the ball is properly in
+play. It is now the sharpest open question on the device: either the guard moves on that
+board, or the plunger does.
+
+## Iteration 32 — the guard comes back with the new ball
+
+Losing the ball clears the guard cooldown, on both boards. The save is scarce *within* a
+ball; it is no longer charged against the next one. A **rescue** does not clear it — the
+ball was never lost, so the rally survives and the guard stays spent, which is the only
+thing §8 does not hand back. Nor does a pass: a crossing is not a ball loss, and the
+cooldown follows each board across the rally.
+
+Both boards, because a drain ends the rally for both of them — the same reason
+`score.end_rally` takes the whole rally score and not the half earned on the board that
+dropped it.
+
+**It is worth about a fifth of the device's presence.** Same runs, with and without the
+reset — `armed` is the share of ball time the bar was actually in its lane:
+
+```
+                              armed        armed
+  board       ball from      (reset)   (no reset)
+  Foundry     the tube          87%          74%
+  Glasshouse  the tube          89%          75%
+  Glasshouse  the plunger        7%           9%
+```
+
+30s against a 5–15s ball reads like a device that is absent most of the time; measured, it
+is now armed 80–93%. One save you have to time, not a device that disappears.
+
+**The Glasshouse plunger row went the wrong way, and that is the finding.** The reset does
+nothing there — 9% to 7% — because Glasshouse serves a ball's width from the mouth of its
+left outlane and the served ball drops straight back into it. The guard is spent inside the
+first second of every ball, so handing it back at the start of each ball just hands it
+something new to be spent by. Two iterations have now flagged that plunger for three
+separate reasons; it is the next thing to move.
+
 *(iterations append here)*
