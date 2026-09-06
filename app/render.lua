@@ -155,47 +155,54 @@ local function draw_incoming(def, u)
   lg.circle("fill", e.x, e.y, 4 + 3 * u)
 end
 
-local function draw_board(def, snap, prev, alpha, view, active, heat, incoming, bstate)
-  local th = THEME[def.id]
-  local dim = active and 1.0 or 0.45
+--- One board, drawn in its own space. Split out of a 181-line draw_board
+--- with nine parameters: each of these is one layer of the picture, in the
+--- order they stack, and `ctx` carries the per-frame facts they share.
+---
+--- @class BoardCtx
+--- @field def table      board definition
+--- @field snap table     this tick's sim snapshot
+--- @field prev table     the previous one, for interpolation (§4.1)
+--- @field alpha number   interpolation factor
+--- @field view table     screen placement and scale
+--- @field active boolean is this the board being played
+--- @field dim number     1.0 active, 0.45 dormant
+--- @field heat number    relay heat, 0..1
+--- @field bstate table   core per-board state (devices, meters, lit)
 
-  love.graphics.push()
-  love.graphics.translate(view.x, view.y)
-  love.graphics.scale(view.s)
-
-  love.graphics.setColor(th.fill[1], th.fill[2], th.fill[3], active and 1 or 0.8)
-  love.graphics.rectangle("fill", 0, 0, def.size.w, def.size.h, 8)
-
-  -- The post parks below the playfield when retracted (that is what "sinks
-  -- into the floor" means in the data), so clip to the board.
-  love.graphics.setScissor(view.x, view.y, def.size.w * view.s, def.size.h * view.s)
-
+--- The only drain on either board (prototype.md §4.6).
+local function draw_drain_line(ctx)
   -- Drain line
-  love.graphics.setColor(0.6, 0.15, 0.15, 0.55 * dim)
+  love.graphics.setColor(0.6, 0.15, 0.15, 0.55 * ctx.dim)
   love.graphics.setLineWidth(1)
-  love.graphics.line(0, def.drain_y, def.size.w, def.drain_y)
+  love.graphics.line(0, ctx.def.drain_y, ctx.def.size.w, ctx.def.drain_y)
+end
 
-  -- Walls
-  love.graphics.setColor(th.wall[1] * dim, th.wall[2] * dim, th.wall[3] * dim, 1)
+--- Static geometry.
+local function draw_walls(ctx, th)
+  love.graphics.setColor(th.wall[1] * ctx.dim, th.wall[2] * ctx.dim, th.wall[3] * ctx.dim, 1)
   love.graphics.setLineWidth(3)
-  for _, poly in ipairs(def.walls) do love.graphics.line(poly) end
+  for _, poly in ipairs(ctx.def.walls) do love.graphics.line(poly) end
+end
 
+--- Foundry's character, and its cross-board payoff when lit (§7.1).
+local function draw_bumpers(ctx)
   -- Bumpers. A struck bumper lights and swells for ~300ms: they are board A's
   -- declared character (prototype.md §4.1) and were previously indistinguishable
   -- from scenery whether or not the ball had just hit them.
-  local bumpers_lit = bstate and (bstate.lit.bumpers or 0) > 0
-  for i, b in ipairs(def.bumpers or {}) do
-    local pulse = fx and fx.hit_pulse(def.id, "bumper", i) or 0
+  local bumpers_lit = ctx.bstate and (ctx.bstate.lit.bumpers or 0) > 0
+  for i, b in ipairs(ctx.def.bumpers or {}) do
+    local pulse = fx and fx.hit_pulse(ctx.def.id, "bumper", i) or 0
     local r = b.r * (1 + 0.18 * pulse)
     -- Lit means Glasshouse cleared its vault and these are briefly worth
     -- LIT_MULT times as much. It has to be unmistakable from across a room,
     -- so lit bumpers change colour rather than just brightening.
     local cr, cg, cb = 0.95, 0.85, 0.30
     if bumpers_lit then cr, cg, cb = 1.0, 0.45, 0.72 end
-    love.graphics.setColor(cr * dim, cg * dim, cb * dim, 0.85 + 0.15 * pulse)
+    love.graphics.setColor(cr * ctx.dim, cg * ctx.dim, cb * ctx.dim, 0.85 + 0.15 * pulse)
     love.graphics.setLineWidth((bumpers_lit and 3 or 2) + 3 * pulse)
     love.graphics.circle("line", b.x, b.y, r)
-    love.graphics.setColor(cr * dim, cg * dim, cb * dim,
+    love.graphics.setColor(cr * ctx.dim, cg * ctx.dim, cb * ctx.dim,
                            (bumpers_lit and 0.34 or 0.18) + 0.62 * pulse)
     love.graphics.circle("fill", b.x, b.y, r)
     love.graphics.setLineWidth(3)
@@ -203,19 +210,22 @@ local function draw_board(def, snap, prev, alpha, view, active, heat, incoming, 
   if bumpers_lit then
     love.graphics.setFont(fonts.small)
     love.graphics.setColor(1, 0.45, 0.72, 0.9)
-    love.graphics.printf(("BUMPERS LIT x%d  (%d)"):format(C.LIT_MULT, bstate.lit.bumpers),
-                         0, 108, def.size.w, "center")
+    love.graphics.printf(("BUMPERS LIT x%d  (%d)"):format(C.LIT_MULT, ctx.bstate.lit.bumpers),
+                         0, 108, ctx.def.size.w, "center")
   end
+end
 
+--- What the partner board has built up here, on the board it belongs to.
+local function draw_cross_board(ctx)
   -- §7 cross-board state, drawn on the board it belongs to so it is visible
   -- on the dormant panel too -- the whole point being that what you built
   -- over there is still there when you arrive.
-  if bstate then
+  if ctx.bstate then
     -- The vault charge, above the bank it will multiply.
-    for name, level in pairs(bstate.meters or {}) do
+    for name, level in pairs(ctx.bstate.meters or {}) do
       if level > 0 then
-        local bank = bstate.banks[name]
-        local first = bank and def.targets[bank.members[1]]
+        local bank = ctx.bstate.banks[name]
+        local first = bank and ctx.def.targets[bank.members[1]]
         if first then
           local u = level / C.CHARGE_MAX
           local w = 96
@@ -231,103 +241,154 @@ local function draw_board(def, snap, prev, alpha, view, active, heat, incoming, 
       end
     end
   end
+end
 
+--- Glasshouse's character. Lit means struck and waiting for its bank.
+local function draw_targets(ctx)
   -- Targets. A lit one has been hit and is waiting for the rest of its bank;
   -- the difference has to be visible at a glance or the bank is a mechanic
   -- only the scoreboard knows about.
-  for i, t in ipairs(def.targets or {}) do
-    local tstate = bstate and bstate.targets[i]
+  for i, t in ipairs(ctx.def.targets or {}) do
+    local tstate = ctx.bstate and ctx.bstate.targets[i]
     local lit    = tstate and tstate.lit
-    local pulse  = fx and fx.hit_pulse(def.id, "target", i) or 0
+    local pulse  = fx and fx.hit_pulse(ctx.def.id, "target", i) or 0
     local corners = geo.rect_corners(t)
     if lit then
-      love.graphics.setColor(0.55 * dim, 0.98 * dim, 0.70 * dim, 0.85 + 0.15 * pulse)
+      love.graphics.setColor(0.55 * ctx.dim, 0.98 * ctx.dim, 0.70 * ctx.dim, 0.85 + 0.15 * pulse)
     else
-      love.graphics.setColor(0.80 * dim, 0.82 * dim, 0.90 * dim, 0.45 + 0.55 * pulse)
+      love.graphics.setColor(0.80 * ctx.dim, 0.82 * ctx.dim, 0.90 * ctx.dim, 0.45 + 0.55 * pulse)
     end
     love.graphics.polygon("fill", corners)
     love.graphics.setColor(1, 1, 1, (lit and 0.5 or 0.22) + 0.5 * pulse)
     love.graphics.setLineWidth(1.5)
     love.graphics.polygon("line", corners)
   end
+end
 
+--- §5: the tube mouth and the arrival point, always visible.
+local function draw_link(ctx)
   -- Tube mouth and arrival point (§5: the link, always visible)
-  local m = def.tube.mouth
-  love.graphics.setColor(0.55 * dim, 0.95 * dim, 0.65 * dim, 0.9)
+  local m = ctx.def.tube.mouth
+  love.graphics.setColor(0.55 * ctx.dim, 0.95 * ctx.dim, 0.65 * ctx.dim, 0.9)
   love.graphics.setLineWidth(2)
   love.graphics.circle("line", m.x, m.y, m.r)
   love.graphics.circle("line", m.x, m.y, m.r * 0.55)
-  local e = def.entry
-  love.graphics.setColor(0.55 * dim, 0.95 * dim, 0.65 * dim, 0.35)
+  local e = ctx.def.entry
+  love.graphics.setColor(0.55 * ctx.dim, 0.95 * ctx.dim, 0.65 * ctx.dim, 0.35)
   love.graphics.circle("line", e.x, e.y, 13)
   love.graphics.line(e.x, e.y, e.x + e.dir.x * 26, e.y + e.dir.y * 26)
+end
 
-  -- Devices
-  for _, d in ipairs(def.devices) do
-    local ds, dp = snap.devices[d.id], prev and prev.devices[d.id]
-    local p = ilerp(dp and dp.p, ds.p, alpha) or ds.p
+--- §6.1: operator devices, amber as they travel and while engaged.
+local function draw_devices(ctx)
+  for _, d in ipairs(ctx.def.devices) do
+    local ds, dp = ctx.snap.devices[d.id], ctx.prev and ctx.prev.devices[d.id]
+    local p = ilerp(dp and dp.p, ds.p, ctx.alpha) or ds.p
     -- Amber when moving or engaged; this is the operator's tell (§6.1).
-    love.graphics.setColor(lerp(0.35, 1.0, p) * dim, lerp(0.45, 0.72, p) * dim, lerp(0.55, 0.20, p) * dim, 1)
+    love.graphics.setColor(lerp(0.35, 1.0, p) * ctx.dim,
+                           lerp(0.45, 0.72, p) * ctx.dim,
+                           lerp(0.55, 0.20, p) * ctx.dim, 1)
     love.graphics.setLineWidth(7)
     if d.kind == "gate" then
-      local ang = ilerp(dp and dp.angle, ds.angle, alpha) or ds.angle
+      local ang = ilerp(dp and dp.angle, ds.angle, ctx.alpha) or ds.angle
       love.graphics.line(d.pivot.x, d.pivot.y,
                          d.pivot.x + math.cos(ang) * d.length,
                          d.pivot.y + math.sin(ang) * d.length)
       love.graphics.circle("fill", d.pivot.x, d.pivot.y, 4)
     else
-      local x = ilerp(dp and dp.x, ds.x, alpha) or ds.x
-      local y = ilerp(dp and dp.y, ds.y, alpha) or ds.y
+      local x = ilerp(dp and dp.x, ds.x, ctx.alpha) or ds.x
+      local y = ilerp(dp and dp.y, ds.y, ctx.alpha) or ds.y
       love.graphics.rectangle("fill", x - d.w / 2, y - d.h / 2, d.w, d.h, 4)
     end
   end
+end
 
-  -- Flippers
-  love.graphics.setColor(0.92 * dim, 0.92 * dim, 0.96 * dim, 1)
+--- The player's own hands.
+local function draw_flippers(ctx)
+  love.graphics.setColor(0.92 * ctx.dim, 0.92 * ctx.dim, 0.96 * ctx.dim, 1)
   love.graphics.setLineWidth(C.FLIPPER_THICK)
-  for _, f in ipairs(def.flippers) do
-    local ang = ilerp(prev and prev.flippers[f.side], snap.flippers[f.side], alpha)
+  for _, f in ipairs(ctx.def.flippers) do
+    local ang = ilerp(ctx.prev and ctx.prev.flippers[f.side], ctx.snap.flippers[f.side], ctx.alpha)
     local sign = (f.side == "left") and 1 or -1
     local tx = f.x + math.cos(ang) * C.FLIPPER_LEN * sign
     local ty = f.y + math.sin(ang) * C.FLIPPER_LEN * sign
     love.graphics.line(f.x, f.y, tx, ty)
     love.graphics.circle("fill", f.x, f.y, C.FLIPPER_THICK * 0.62)
   end
+end
 
+--- Effects under the ball, over the geometry; then the ball itself.
+local function draw_effects_and_ball(ctx)
   -- Effects sit under the ball and over the geometry, in board space.
-  if fx then fx.draw_board(def.id, heat) end
+  if fx then fx.draw_board(ctx.def.id, ctx.heat) end
 
   -- Incoming ball, on the board that is about to receive it.
-  if incoming then draw_incoming(def, incoming) end
+  if ctx.incoming then draw_incoming(ctx.def, ctx.incoming) end
 
   -- Ball. Its halo takes the rally heat: at rally 0 it is a plain white ball,
   -- and by rally 10 it is visibly running hot (§9).
-  if snap.ball then
-    local bx = ilerp(prev and prev.ball and prev.ball.x, snap.ball.x, alpha)
-    local by = ilerp(prev and prev.ball and prev.ball.y, snap.ball.y, alpha)
-    love.graphics.setColor(1, 0.95 - 0.35 * heat, 0.85 - 0.65 * heat, 0.25 + 0.22 * heat)
-    love.graphics.circle("fill", bx, by, C.BALL_RADIUS * (2.1 + 0.9 * heat))
-    love.graphics.setColor(1, 1 - 0.10 * heat, 1 - 0.22 * heat, 1)
+  if ctx.snap.ball then
+    local bx = ilerp(ctx.prev and ctx.prev.ball and ctx.prev.ball.x, ctx.snap.ball.x, ctx.alpha)
+    local by = ilerp(ctx.prev and ctx.prev.ball and ctx.prev.ball.y, ctx.snap.ball.y, ctx.alpha)
+    love.graphics.setColor(1, 0.95 - 0.35 * ctx.heat, 0.85 - 0.65 * ctx.heat, 0.25 + 0.22 * ctx.heat)
+    love.graphics.circle("fill", bx, by, C.BALL_RADIUS * (2.1 + 0.9 * ctx.heat))
+    love.graphics.setColor(1, 1 - 0.10 * ctx.heat, 1 - 0.22 * ctx.heat, 1)
     love.graphics.circle("fill", bx, by, C.BALL_RADIUS)
   end
+end
 
-  love.graphics.setScissor()
-  love.graphics.pop()
-
+--- The label, and the §7 flag when this board's cross-board state moved.
+local function draw_nameplate(ctx, th)
   -- §7: the panel flags cross-board changes, so what you built on the board
   -- you are not looking at is never something you have to remember.
-  local flash = fx and fx.panel_flash(def.id) or 0
+  local flash = fx and fx.panel_flash(ctx.def.id) or 0
   if flash > 0 then
     love.graphics.setColor(1, 0.78, 0.35, 0.75 * flash)
     love.graphics.setLineWidth(2 + 3 * flash)
-    love.graphics.rectangle("line", view.x - 3, view.y - 3,
-                            def.size.w * view.s + 6, def.size.h * view.s + 6, 10)
+    love.graphics.rectangle("line", ctx.view.x - 3, ctx.view.y - 3,
+                            ctx.def.size.w * ctx.view.s + 6, ctx.def.size.h * ctx.view.s + 6, 10)
   end
 
   -- Board nameplate
   love.graphics.setFont(fonts.small)
-  love.graphics.setColor(th.wall[1], th.wall[2], th.wall[3], active and 0.95 or 0.5)
-  love.graphics.print(def.name:upper(), view.x, view.y - 15)
+  love.graphics.setColor(th.wall[1], th.wall[2], th.wall[3], ctx.active and 0.95 or 0.5)
+  love.graphics.print(ctx.def.name:upper(), ctx.view.x, ctx.view.y - 15)
+end
+
+--- Draw one board: background, geometry, content, devices, ball, label.
+local function draw_board(def, snap, prev, alpha, view, active, heat, incoming, bstate)
+  local th  = THEME[def.id]
+  local ctx = {
+    def = def, snap = snap, prev = prev, alpha = alpha, view = view,
+    active = active, dim = active and 1.0 or 0.45,
+    heat = heat, incoming = incoming, bstate = bstate,
+  }
+
+  love.graphics.push()
+  love.graphics.translate(view.x, view.y)
+  love.graphics.scale(view.s)
+
+  love.graphics.setColor(th.fill[1], th.fill[2], th.fill[3], active and 1 or 0.8)
+  love.graphics.rectangle("fill", 0, 0, def.size.w, def.size.h, 8)
+
+  -- The post parks below the playfield when retracted (that is what "sinks
+  -- into the floor" means in the data), so clip to the board.
+  love.graphics.setScissor(view.x, view.y, def.size.w * view.s, def.size.h * view.s)
+
+  draw_drain_line(ctx)
+  draw_walls(ctx, th)
+  draw_bumpers(ctx)
+  draw_cross_board(ctx)
+  draw_targets(ctx)
+  draw_link(ctx)
+  draw_devices(ctx)
+  draw_flippers(ctx)
+  draw_effects_and_ball(ctx)
+
+  love.graphics.setScissor()
+  love.graphics.pop()
+
+  draw_nameplate(ctx, th)
 end
 
 ---------------------------------------------------------------------------
@@ -409,11 +470,10 @@ local function bar(x, y, w, h, p, r, g, b)
   love.graphics.rectangle("fill", x, y, w * math.max(0, math.min(1, p)), h, 3)
 end
 
-local function draw_hud(state, defs, snaps, legend)
-  local x, y = M.hud_x, 380
-  local active = state.active
-  local def = defs[active]
-
+--- Which board the panel is describing, and -- mid-pass -- how long
+--- until the ball lands on it.
+---@return number y
+local function hud_header(state, def, x, y)
   love.graphics.setFont(fonts.head)
   local transit = state.phase == "transit"
   col(1, 1, 1, 0.92)
@@ -431,7 +491,14 @@ local function draw_hud(state, defs, snaps, legend)
                         x + fonts.head:getWidth(head) + 14, y + 9)
   end
   y = y + 30
+  return y
+end
 
+--- §4: roles are implicit in ball position, so the panel only reports
+--- them. Naming each player's actual keys matters because those keys
+--- change meaning every time the ball crosses.
+---@return number y
+local function hud_roles(x, y, legend, active, transit)
   -- Roles: implicit in ball position, so just report them (§4).
   local roles = { [1] = intents.role_of(1, active), [2] = intents.role_of(2, active) }
   love.graphics.setFont(fonts.body)
@@ -450,7 +517,13 @@ local function draw_hud(state, defs, snaps, legend)
     love.graphics.setFont(fonts.body)
     y = y + 22
   end
+  return y
+end
 
+--- §7: what the cross-board loop wants next. Amber means act on this
+--- board, blue means it wants a pass.
+---@return number y
+local function hud_objective(state, defs, x, y)
   -- What to do. The cross-board loop is the whole game and was previously
   -- visible only as two numbers moving; this says it in words (§7).
   y = y + 12
@@ -471,7 +544,12 @@ local function draw_hud(state, defs, snaps, legend)
     love.graphics.print("on " .. (names[obj.board] or obj.board), x, y + 19)
   end
   y = y + 40
+  return y
+end
 
+--- §6.1/§6.2: each operator device, its travel, and what it costs.
+---@return number y
+local function hud_devices(state, def, snaps, x, y, active)
   col(1, 1, 1, 0.5)
   love.graphics.setFont(fonts.small)
   love.graphics.print("OPERATOR DEVICES  (on " .. def.name .. ")", x, y)
@@ -489,7 +567,13 @@ local function draw_hud(state, defs, snaps, legend)
     love.graphics.print(d.tradeoff, x, y + 19)
     y = y + 42
   end
+  return y
+end
 
+--- The prototype's instrument panel (§14). The multiplier is the biggest
+--- thing on it because §9 puts the whole risk curve on relay heat.
+---@return number y
+local function hud_score(state, x, y)
   -- The prototype's instrument panel (§14: does the rally feel good?).
   -- The multiplier is the biggest thing on it on purpose: §9 puts the entire
   -- risk curve on relay heat, so it is the one number both players are
@@ -526,7 +610,13 @@ local function draw_hud(state, defs, snaps, legend)
   col(1, 1, 1, 0.35)
   love.graphics.print(("best run %d crossings    passes %d    drains %d")
     :format(st.best_relay, st.passes, st.drains), x, y)
+  return y
+end
 
+--- Whatever the match is doing that is not play: serving, drained, or
+--- the §8 rescue window, which is the most urgent thing the game ever
+--- puts on screen.
+local function hud_banner(state, defs, legend, active)
   -- Phase banner
   local vx, vy = M.view[active].x, M.view[active].y
   local vw = defs[active].size.w * M.view[active].s
@@ -575,11 +665,28 @@ local function draw_hud(state, defs, snaps, legend)
     love.graphics.setColor(1, 0.42, 0.46, 0.95)
     love.graphics.rectangle("fill", vx + (vw - bw) / 2, vy + 376, bw * u, 8, 4)
   end
+end
+
+--- The panel between the two boards. Split out of a 174-line function; each
+--- helper draws one block and returns the y cursor for the next.
+local function draw_hud(state, defs, snaps, legend)
+  local x, y   = M.hud_x, 380
+  local active = state.active
+  local def    = defs[active]
+  local transit = state.phase == "transit"
+
+  y = hud_header(state, def, x, y)
+  y = hud_roles(x, y, legend, active, transit)
+  y = hud_objective(state, defs, x, y)
+  y = hud_devices(state, def, snaps, x, y, active)
+  hud_score(state, x, y)
+  hud_banner(state, defs, legend, active)
 
   love.graphics.setFont(fonts.small)
   col(1, 1, 1, 0.28)
   love.graphics.print("R restart    F1 debug    ESC quit", M.hud_x, H - 26)
 end
+
 
 ---------------------------------------------------------------------------
 
