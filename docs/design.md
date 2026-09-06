@@ -71,9 +71,16 @@ a defined entry point on the other.
 - **Multiple exits, multiple entries.** Each board has several tube mouths; each maps to a
   different arrival point on the partner board. Choosing which tube to shoot is choosing
   how hard your partner's next ten seconds are.
-- **The pass carries state.** Exit velocity and spin survive the trip. A clean ramp shot
-  arrives high and controllable; a desperate flail arrives fast and low. A bad pass is a
-  real thing you can do to your friend.
+- **The pass carries state.** A clean ramp shot arrives controllable; a desperate flail
+  arrives fast. A bad pass is a real thing you can do to your friend.
+
+  **As built (2026-09-06), only the SPEED survives, not the direction or the spin.** The
+  tube carries a scalar, and the receiving board launches the ball along its own entry
+  vector at that speed. That is deliberate for direction — an arrival that kept its
+  original heading could emerge travelling into a wall — but it does mean a pass is
+  currently one number, and "arrives high and controllable" versus "fast and low" is
+  only the fast/slow half of that sentence. Spin is not transferred at all. If the pass
+  should carry more, this is the place it would go in.
 - **Transit is visible and takes time.** ~700–900ms, animated along the tube where both
   players can see it. This is the telegraph, the breath between phases, and (later) the
   network latency budget. See `technical-choices.md` §6.
@@ -229,27 +236,55 @@ re-serves, as before. That waits on session structure (§13.2).
 
 The multiplier lives on **passing**, not on shots. **DECIDED**
 
-- **Relay heat.** A ball relayed back and forth without draining gets hotter with each
-  crossing — worth more, and moving faster. The rally becomes simultaneously more valuable
-  and more likely to end. A pure risk curve generated entirely by cooperation.
+- **Relay heat. BUILT 2026-09-06.** A ball relayed back and forth without draining gets
+  hotter with each crossing — worth more, and moving faster. The multiplier *is* the
+  crossing count, so ×7 means "we have passed seven times without dropping it": a
+  ten-crossing rally is worth 55,000 against 10,000 for the same ten passes spread over
+  ten drains, 5.5×. "Moving faster" is a separate and much gentler curve, +5% arrival
+  speed per crossing to +55%, because speed is a difficulty knob and a tunneling risk
+  where score is free.
 - **Simultaneity objectives** for the big jackpots: both boards holding a state at once,
-  or matching shots within a window. Shots you cannot make alone.
-- **Home-grind lines** that reward not passing, so §5's temptation rule holds.
+  or matching shots within a window. Shots you cannot make alone. **Not built.**
+- **Home-grind lines. BUILT, as the vault cap.** Foundry's bumpers charge Glasshouse's
+  vault (§7.1) at ~0.6 hits/s to a ceiling of ×10, so staying home pays for about 17
+  seconds and then stops. That is what makes the pass the only way to cash without
+  making it compulsory — §5's temptation rule expressed as a number rather than a hope.
 
 **OPEN:** Session structure. Endless high-score run? A goal-based run with an ending?
 Roguelite meta between runs (drafting board segments)? This determines a lot of scaffolding
 and should be answered before scoring is tuned.
 
+> **That sequencing was not followed, and it is worth knowing.** The scoring above was
+> built on 2026-09-06 while this question was still open, which means it assumes an
+> endless session throughout: nothing resets, nothing ends, and `best_rally_score` is
+> the only number that behaves like a result. Deciding on team lives or a run length
+> will likely require revisiting the curve — a rally worth 5.5× more is a very
+> different proposition when you have three balls than when you have infinite ones.
+>
+> It was built anyway because "it works but it isn't fun" needed answering and a score
+> was the cheapest part of that. But the doc warned about exactly this ordering, so the
+> debt is recorded rather than discovered later.
+
 ## 10. Presentation
+
+All four are **built as of 2026-09-06**; the notes say how.
 
 - **One shared camera on the active board.** Because both players are always attending to
   the same board, we need no split screen and make no compromise on framing. This falls out
   of the one-ball decision and is a large part of why it's the right call.
-- **Dormant board as a live side panel**, small, with change highlights.
-- **Tube transit gets its own beat** — the camera can pull out slightly to show both boards
-  and the ball travelling between them. Free drama, and it doubles as the handoff telegraph.
-- **Audio does the warning work.** Incoming ball, operator device arming, purgatory timer —
-  all of these need to be legible without looking.
+- **Dormant board as a live side panel**, small, with change highlights. The panel
+  outlines itself when its cross-board state moves (§7.1), so a charge landing on the
+  board nobody is watching is visible on that board.
+- **Tube transit gets its own beat** — both boards pull back, the ball arcs between them
+  leaving a wake, and rings collapse onto the entry point it is heading for. The HUD
+  stays up throughout, which it did not originally: hiding it was what made the beat
+  read as dead air, since §4.5 hands the sender the destination board's devices for
+  exactly those 800ms.
+- **Audio does the warning work.** Thirteen synthesized voices, no asset files. Incoming
+  ball, operator devices arming, the purgatory window, and relay heat pitching the whole
+  kit up as the rally gets hotter. The drain sound deliberately does not play when the
+  ball crosses the line — the ball may still be rescued, and saying otherwise would be
+  a lie told 1.9 seconds early.
 
 ## 11. Designing for online, while shipping local
 
