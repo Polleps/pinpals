@@ -27,19 +27,40 @@
 package.path = "./?.lua;./?/init.lua;" .. package.path
 
 local captured = {}
+
+-- The stub mirrors LÖVE's real signatures exactly. It has to: this file is
+-- inside the project the type checker analyses, so a narrower stub becomes
+-- the type it believes love.sound.newSoundData has, and every real four-
+-- argument call in app/audio.lua starts failing `make types`. A test double
+-- that lies about its interface breaks more than it tests.
+---@diagnostic disable: duplicate-set-field, lowercase-global
 love = {                                             -- luacheck: ignore
   sound = {
-    newSoundData = function(n)
-      local d = { n = n, s = {} }
+    ---@param samples integer
+    ---@param rate integer
+    ---@param bits integer
+    ---@param channels integer
+    newSoundData = function(samples, rate, bits, channels)
+      local _ = { rate, bits, channels }
+      local d = { n = samples, s = {} }
       function d:setSample(i, v) self.s[i] = v end
       captured[#captured+1] = d
       return d
     end,
   },
-  audio = { newSource = function(data) return { data = data,
-    clone = function(self) return self end, stop = function() end,
-    setVolume = function() end, setPitch = function() end, play = function() end,
-  } end },
+  audio = {
+    ---@param data table
+    ---@param kind string
+    newSource = function(data, kind)
+      local _ = kind
+      return {
+        data = data,
+        clone = function(self) return self end, stop = function() end,
+        setVolume = function() end, setPitch = function() end,
+        play = function() end,
+      }
+    end,
+  },
 }
 
 local audio = require("app.audio")
