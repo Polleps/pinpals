@@ -210,6 +210,7 @@ cool things to add or improve, document them, add them here.
 - **Integration soak** · DONE (9d6b4cd). Found that the rescue was firing for free.
 - **Frame cost measured** · DONE (e68d9bd). Nothing added tonight was costed until now.
 - **CLAUDE.md tooling section** · DONE (b9c295e). It was an empty header.
+- **render.lua refactor** · DONE (0ad8203). Two functions had grown past reading.
 - **Session structure (§13.2)** · NOT ATTEMPTED, deliberately. There is a score and
   nothing that ends. It is the biggest open question left, and it is also the one where
   a wrong guess costs the most: team lives, run length and whether there is an ending
@@ -782,5 +783,26 @@ four lessons that each cost a wrong conclusion first:
 4. **Measure the thing you're about to assert.** Both board identities and the post's
    trade-off shipped documented backwards, because the claims were written and never
    checked.
+
+### Iteration 19 — splitting what had grown past reading · `0ad8203`
+
+`CLAUDE.md` asks for small contained functions, and `app/render.lua` had drifted:
+`draw_board` at 181 lines with nine parameters, `draw_hud` at 174. Both got there the
+same way — every addition tonight was one more paragraph in an already-long function,
+and none was obviously the one that made it too long.
+
+`draw_board` is now ten named layers in the order they stack, sharing a `ctx` table
+instead of nine positional arguments. `draw_hud` is six blocks, each returning the y
+cursor for the next. **Longest function: 181 → 64 lines.**
+
+Verified as a pure refactor rather than asserted to be one: four reference frames
+captured beforehand — ordinary play, a bumper strike, a transit beat, a purgatory
+window — and **all four byte-identical afterwards.**
+
+That verification earned its place immediately. Splitting by mechanical substitution
+produced eight broken references on the first attempt (`ctx.ctx.prev`,
+`draw_ctx.incoming`, a stray `local def = defs[active]` inside a function that already
+takes `def`). luacheck caught every one; the screenshots confirmed the fixes were right
+rather than merely syntactic.
 
 *(iterations append here)*
