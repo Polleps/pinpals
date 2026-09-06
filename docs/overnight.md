@@ -222,6 +222,8 @@ cool things to add or improve, document them, add them here.
 - **Held device key lost on role swap** · DONE (f1407a4). A released gate stayed open.
 - **Tests for the night's validators** · DONE. They had caught real bugs and had no tests.
 - **End-to-end verification** · DONE (cd6e7a0). The real frame loop, and a 60-min soak.
+- **Audio kit verified** · DONE (df7ca98, ca3a52c). Nobody had heard it; now it is at
+  least provably not silence.
 - **Session structure (§13.2)** · NOT ATTEMPTED, deliberately. There is a score and
   nothing that ends. It is the biggest open question left, and it is also the one where
   a wrong guess costs the most: team lives, run length and whether there is an ending
@@ -951,5 +953,34 @@ Random play mashes the post far more than a person would, so that isn't a verdic
 But if a human session lands anywhere near it, the purgatory window is too generous and
 losing the ball has stopped meaning anything. The session log counts rescues, so one
 playtest settles it — better than me guessing at a constant at 3am.
+
+### Iteration 26 — the kit is not silence · `df7ca98`, `ca3a52c`
+
+Nobody has heard the audio. It was written, it builds, and every check so far confirmed
+only that it doesn't crash — equally true of a kit rendering eleven seconds of nothing.
+
+Three things are measurable without ears, each a real bug: silence, clipping, and a DC
+offset that wastes headroom and thumps on start. All thirteen voices:
+
+```
+peaks 0.15–0.51    clipped samples 0    DC within 0.002 of zero
+```
+
+Recorded rather than acted on: the peaks sit around half scale. That's deliberate
+headroom so overlapping voices don't clip the master — and it also means the kit may
+simply be **too quiet**, which only ears can settle. `prototype.md` now says which
+numbers to raise if so (the per-voice gains, not the playback volumes, so the headroom
+survives).
+
+**One red commit tonight, and it was mine.** The probe stubs `love.sound` to run in the
+bare interpreter, and that stub lives inside the project the type checker analyses — so
+its narrower signature became the type LLS believed, and every real call in
+`app/audio.lua` started failing `make types`. A test double that lies about its
+interface breaks more than it tests.
+
+Worse was *how* it got committed. I'd been running `make check 2>&1 | tail -2 && git
+commit` all night, and **a pipe masks make's exit status** — the `&&` sees `tail`
+succeed. Every earlier commit happened to be green and I read each output, but the guard
+was never actually guarding. Fixed at the source, and `set -o pipefail` from here.
 
 *(iterations append here)*
