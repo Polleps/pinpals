@@ -7,17 +7,21 @@
 --- Re-measured on the boards-v2 layout (tests/probe_identity.lua, 2026-09-06):
 ---
 ---   board        gap   mean ball life   drains/s   survival   points/s
----   Foundry     27.6            9.46s     0.0793        25%         18
----   Glasshouse  43.6            5.76s     0.1533        12%        192
+---   Foundry     27.6           10.76s     0.0666        26%         14
+---   Glasshouse  43.6            5.40s     0.1543        17%        242
 ---
---- The ball lives 64% longer here and pays a tenth as much. That is the trade
---- the pass is choosing between, and both halves of it got sharper when the
---- boards grew: Glasshouse now drains almost twice as fast as Foundry, where
---- before it was only 7% faster.
+--- The ball lives twice as long here and pays a seventeenth as much. That is
+--- the trade the pass is choosing between, and both halves of it got sharper
+--- when the boards grew: Glasshouse now drains 2.3x as fast as Foundry, where
+--- before it was only 7% faster and the identity was a claim rather than a
+--- fact.
 ---
---- Both boards are deadlier than they were (Foundry 12.19s -> 9.46s,
---- Glasshouse 9.86s -> 5.76s). That is the outlanes, which are a second and
---- third way to lose the ball that no operator device can guard.
+--- Foundry is barely changed on ball life (12.19s -> 10.76s) and is actually
+--- SAFER per second than before (0.0725 -> 0.0666 drains/s) despite gaining
+--- two outlanes, because the five-bumper nest keeps the ball up the board.
+--- Glasshouse lost nearly half its ball life (9.86s -> 5.40s): a wider flipper
+--- gap also means a longer unguarded run down each side, so the outlanes cost
+--- it far more. That was not designed and it is worth keeping.
 ---
 --- Coordinates are world pixels (core/constants.lua: 64 px = 1 m), y down,
 --- origin at the board's top-left. Playfield is 448 x 960.
@@ -163,6 +167,12 @@ return {
     { x = 56,  y = 230, r = 22, restitution = 1.15 },
     { x = 168, y = 175, r = 22, restitution = 1.15 },
     { x = 240, y = 205, r = 22, restitution = 1.15 },
+    -- Two more on the right, where probe_where puts a second heavy stream --
+    -- x=272..336 and x=368..400 at every height it samples -- and where the
+    -- board was simply empty. Foundry's identity is chaos, so the right way
+    -- to fill its dead half is more of the thing it already is.
+    { x = 312, y = 190, r = 22, restitution = 1.15 },
+    { x = 376, y = 252, r = 22, restitution = 1.15 },
   },
 
   -- The drain gap is 27.6px, 16px narrower than Glasshouse's, and it is the

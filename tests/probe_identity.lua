@@ -12,6 +12,28 @@ return function()
   local Board  = require("sim.board")
   local boards = require("data.tables.init").load()
 
+  --- Bank membership, resolved once from the board data the way core/state.lua
+  --- does it. This probe used to treat "all targets on the board" as one bank
+  --- and to clear the lit set at the start of every ball, which was accurate
+  --- while Glasshouse had exactly two targets in exactly one bank and became
+  --- silently wrong the moment it had four in two. It reported ONE completion
+  --- where the rules produce nineteen, and dragged points/s down with it --
+  --- a probe that lies is worse than no probe, because its numbers get
+  --- written into design docs.
+  ---
+  --- core/state.lua keeps a target lit until its own bank completes, for the
+  --- life of the match and not the life of the ball, so a bank is something
+  --- two players build across several balls. That is modelled here now.
+  local function banks_of(def)
+    local of, members = {}, {}
+    for i, t in ipairs(def.targets or {}) do
+      of[i] = t.bank
+      members[t.bank] = members[t.bank] or {}
+      table.insert(members[t.bank], i)
+    end
+    return of, members
+  end
+
   local lit = {}
 
   local function cmd(gate, post, left, right)
@@ -26,6 +48,7 @@ return function()
 
   local function ball_life(def, seeds, balls_per_seed)
     local lives, drains, passes = {}, 0, 0
+    local bank_of, bank_members = banks_of(def)
     -- Points earned per second of ball time, which is the number that says
     -- what a board is FOR. Scored at x1 throughout: this measures the board,
     -- not the rally on top of it.
@@ -34,10 +57,10 @@ return function()
     for s = 1, seeds do
       math.randomseed(31337 + s * 977)
       local b = Board.new(def)
+      lit = {}                     -- per match, not per ball, as core/ has it
       for _ = 1, balls_per_seed do
         b:serve()
         local t, over = 0, false
-        lit = {}
         local c = cmd()
         while not over and t < 30 * C.TICK_HZ do
           t = t + 1
@@ -57,17 +80,17 @@ return function()
               hits.target = hits.target + 1
               points = points + score.value("target", 0)
               -- Bank completion, simulated the way core/ does it.
-              lit = lit or {}
               if not lit[ev.index] then
                 lit[ev.index] = true
+                local bank = bank_of[ev.index]
                 local all = true
-                for i = 1, #(def.targets or {}) do
+                for _, i in ipairs(bank_members[bank] or {}) do
                   if not lit[i] then all = false break end
                 end
                 if all then
                   hits.bank = hits.bank + 1
                   points = points + score.value("bank", 0)
-                  lit = {}
+                  for _, i in ipairs(bank_members[bank]) do lit[i] = nil end
                 end
               end
             end

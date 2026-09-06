@@ -6,15 +6,15 @@
 ---
 --- Re-measured on the boards-v2 layout (probe_identity + probe_reach):
 ---
----   Foundry     chaotic, forgiving, cheap. A bumper nest across the top of
----               the board keeps the ball alive and crowds the aim. Ball life
----               9.46s, 18 points/s, swept pass 50%, drains 0.0793/s.
----   Glasshouse  clean, precise, expensive. No bumpers, a two-target bank in
----               the left field, and a drain gap 16px wider. Ball life 5.76s,
----               192 points/s, swept pass 50%, drains 0.1533/s.
+---   Foundry     chaotic, forgiving, cheap. A five-bumper nest across the top
+---               keeps the ball alive and crowds the aim. Ball life 10.76s,
+---               14 points/s, swept pass 50%, drains 0.0666/s.
+---   Glasshouse  clean, precise, expensive. No bumpers, two target banks, and
+---               a drain gap 16px wider. Ball life 5.40s, 242 points/s,
+---               swept pass 50%, drains 0.1543/s.
 ---
---- Glasshouse pays 10.7x per second of ball time and kills the ball nearly
---- twice as fast. That makes the pass the decision design.md §6.2 asks for,
+--- Glasshouse pays 17x per second of ball time and kills the ball 2.3x as
+--- fast. That makes the pass the decision design.md §6.2 asks for,
 --- one level up from the devices: do I keep the rally safe, or send it
 --- somewhere it can actually score?
 ---
@@ -128,9 +128,59 @@ return {
   -- 18/24/12 and the board became a ball trap -- mean ball life 30.00s, the
   -- probe's timeout, with a drain rate of exactly zero. The ball rattled in
   -- the bank forever. Balance is not worth a board the ball cannot leave.
+  -- B's character, and the aimed scoring content in the game.
+  --
+  -- A bank: each target lights when struck, and lighting all of them pays
+  -- SCORE_BANK on top -- multiplied by everything Foundry charged into the
+  -- vault meter (§7.1) -- and resets them. Hitting a lit target still scores
+  -- but does not re-count, or the cheapest way to clear a bank is to rattle
+  -- against one target.
+  --
+  -- Placed against measured streams, which took three attempts and one
+  -- outright failure. probe_where puts Glasshouse's falling traffic in a
+  -- narrow left column around x=80-110 and a broad right stream from x=240
+  -- to 400. A row only survives across the broad one:
+  --
+  --   position          hits per 720s of play
+  --   ( 56,470)   left column          154
+  --   (124,470)   left column, wide     13   <- dropped
+  --   (300,480)   right stream          25
+  --   (352,480)   right stream          27
+  --   (404,480)   right stream          32
+  --
+  -- The 12:1 split between the two left-column targets is what made the bank
+  -- stop completing: with those two as the whole vault it cleared 16 times in
+  -- a probe run, and adding a second bank next to them dropped it to ZERO.
+  -- A bank whose slowest member is twelve times slower than its fastest is a
+  -- mechanic that visibly exists and effectively cannot be finished -- the
+  -- same failure this board shipped once before with a middle target nothing
+  -- could reach, arrived at from the opposite direction.
+  --
+  -- So the wide left target is gone, and the bank is the balanced right-hand
+  -- row plus the live left one. Four targets, none of them scenery, and it
+  -- fills the right half of the board that used to be empty.
+  -- TWO banks, and which targets belong to which is the whole decision.
+  --
+  -- The vault is the §7.1 cross-board loop: Foundry charges it, clearing it
+  -- arms Foundry again, and if it does not clear regularly the loop is a
+  -- diagram rather than a mechanic. So the vault gets the two targets that
+  -- measure IDENTICAL -- 28 hits each -- because a bank completes at the rate
+  -- of its slowest member and nothing else.
+  --
+  -- A four-target vault was tried and is the cautionary version: every target
+  -- live, 19 completions in a raw 720s probe, and exactly ONE in a real match
+  -- run. Glasshouse's ball lives 5.4s, so a bank needing four separate
+  -- targets spans a dozen balls, and the ball is usually on the other board.
+  -- Points per second went 192 -> 87 on that alone.
+  --
+  -- The gallery is the consolation bank: it pays on its own and charges
+  -- nothing across the tube, so its members can be unbalanced without
+  -- breaking anything.
   targets = {
-    { x = 56,  y = 470, w = 28, h = 9, angle = 0, bank = "vault" },
-    { x = 124, y = 470, w = 28, h = 9, angle = 0, bank = "vault" },
+    { x = 300, y = 480, w = 28, h = 9, angle = 0, bank = "vault" },
+    { x = 352, y = 480, w = 28, h = 9, angle = 0, bank = "vault" },
+    { x = 56,  y = 470, w = 28, h = 9, angle = 0, bank = "gallery" },
+    { x = 404, y = 480, w = 28, h = 9, angle = 0, bank = "gallery" },
   },
 
   flippers = {
