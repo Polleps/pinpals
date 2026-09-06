@@ -150,6 +150,7 @@ cool things to add or improve, document them, add them here.
   between what `design.md` marks DECIDED and what existed.
 - **Objective readout + dormant-panel flash (§7)** · DONE (0b6e034). The cross-board
   loop worked and was invisible; now it says what it wants.
+- **Integration soak** · DONE (9d6b4cd). Found that the rescue was firing for free.
 - **Session structure (§13.2)** · NOT ATTEMPTED, deliberately. There is a score and
   nothing that ends. It is the biggest open question left, and it is also the one where
   a wrong guess costs the most: team lives, run length and whether there is an ending
@@ -621,5 +622,41 @@ timer running out, and the readout should point at the thing that expires.
 Plus the §7 panel flash — a board outlines itself when its cross-board state changes,
 so a charge landing on the *dormant* board is visible there rather than being something
 you have to remember.
+
+### Iteration 15 — the soak found a free rescue · `9d6b4cd`
+
+Every system added tonight is tested alone, and none had been run against the others
+for a sustained stretch. A 10-minute random-play soak with invariants checked every
+tick found a real bug in the first run:
+
+```
+29 rescues, 1 drain
+```
+
+The ball essentially never died. My rescue condition was "post commanded at any point
+in the window" — a **state**, not an action. An operator idling with the post up
+rescued every ball for free, and after a rescue the post was usually still up to
+rescue the next one.
+
+I had argued this couldn't happen: a raised post stops 100% of drains, so if the ball
+drained the post was down. **That's only true of a post fully raised.** One commanded
+but still travelling doesn't stop the ball and does satisfy the check.
+
+The rescue now arms on the post being *down* when purgatory opens and requires a fresh
+raise; releasing an already-up post re-arms it, so the save stays available to anyone
+who does something to earn it.
+
+| | rescues | drains | score |
+|---|---|---|---|
+| before | 29 | 1 | 814,600 |
+| after | 22 | 5 | 323,650 |
+
+Random play toggles far more often than a person would, so 22/5 isn't a balance target
+— only evidence the save is no longer free.
+
+A 60-second version of the soak is now part of `make check` (2.0s → 3.6s): one ball
+while playing, meters and lit counters in range, rally score never exceeding the
+session, the objective never empty, the feed never past its cap. It's the only test
+that runs everything at once.
 
 *(iterations append here)*
