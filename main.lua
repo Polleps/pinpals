@@ -18,7 +18,7 @@ io.stdout:setvbuf("line")
 local C = require("core.constants")
 
 local mode, shot_ticks, shot_open, shot_pass = "play", 240, false, false
-local hot_on = true
+local hot_on, shot_coords = true, nil
 
 for i, v in ipairs(arg or {}) do
   if v == "--test" then mode = "test" end
@@ -26,6 +26,9 @@ for i, v in ipairs(arg or {}) do
   if v == "--open" then shot_open = true end
   if v == "--pass" then shot_open = true; shot_pass = true end
   if v == "--no-hot" then hot_on = false end
+  -- `--shot 1 --coords b` prints a board's coordinates to a PNG: the same
+  -- overlay F2 draws, but capturable, diffable and pinnable next to the file.
+  if v == "--coords" then shot_coords = (arg[i + 1] == "b") and "b" or "a" end
 end
 
 local match, render, input, audio, fx, record, boards
@@ -201,6 +204,7 @@ function love.draw()
   if mode == "test" then return end
 
   if mode == "shot" then
+    render.inspect = shot_coords
     render.update_camera(match.state, boards, 1)   -- snap the camera, no easing
     render.draw(match, { input.legend(1), input.legend(2) }, { debug = true })
     if not shot_done then
@@ -226,6 +230,8 @@ function love.keypressed(key)
   if mode ~= "play" then return end
   if key == "escape" then love.event.quit() return end
   if key == "f1" then debug_on = not debug_on return end
+  if key == "f2" then render.toggle_inspect(match.state.active) return end
+  if key == "tab" then render.swap_inspect() return end
   if key == "f5" then
     -- A manual reload re-stamps the watcher too, or the same edit comes back
     -- a quarter of a second later as an automatic one and restarts the match

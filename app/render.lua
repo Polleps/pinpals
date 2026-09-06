@@ -7,6 +7,7 @@ local intents = require("core.intents")
 local score   = require("core.score")
 local geo     = require("core.geometry")
 local objective = require("core.objective")
+local inspect = require("app.inspect")
 
 local M = {}
 
@@ -80,6 +81,7 @@ end
 function M.load(defs)
   layout(defs)
   fonts = fonts or {
+    tiny  = love.graphics.newFont(9),
     small = love.graphics.newFont(11),
     body  = love.graphics.newFont(14),
     head  = love.graphics.newFont(20),
@@ -120,9 +122,25 @@ local function ilerp(prev, cur, alpha) return prev and cur and lerp(prev, cur, a
 -- Camera
 ---------------------------------------------------------------------------
 
+--- nil, or the id of the board whose coordinates are on screen (F2). It moves
+--- the camera as well as drawing the overlay, so the board being inspected is
+--- the big one whether or not the ball happens to be on it -- otherwise the
+--- only way to look at the other board's numbers is to make the pass first.
+M.inspect = nil
+
+---@param active string the board to fall back to when switching the mode on
+function M.toggle_inspect(active)
+  M.inspect = M.inspect and nil or active
+end
+
+function M.swap_inspect()
+  if M.inspect then M.inspect = (M.inspect == "a") and "b" or "a" end
+end
+
 --- Target scale per board. During transit both are pulled back to the same
 --- size; otherwise the board with the ball is the big one.
 local function target_scale(state, id)
+  if M.inspect then return (id == M.inspect) and S_ACTIVE or S_DORMANT end
   if state.phase == "transit" then return S_TRANSIT end
   return (id == state.active) and S_ACTIVE or S_DORMANT
 end
@@ -836,7 +854,8 @@ local function draw_hud(state, defs, snaps, legend)
 
   love.graphics.setFont(fonts.small)
   col(1, 1, 1, 0.28)
-  love.graphics.print("R restart   F1 debug   F5 reload   ESC quit", M.hud_x, H - 26)
+  love.graphics.print("R restart   F1 debug   F2 coords   F5 reload   ESC quit",
+                      M.hud_x, H - 26)
 end
 
 ---------------------------------------------------------------------------
@@ -922,7 +941,7 @@ end
 
 ---------------------------------------------------------------------------
 
----@param flags table|nil { debug = boolean }
+---@param flags table|nil { debug = boolean, } -- inspect lives in M.inspect
 function M.draw(match, legend, flags)
   flags = flags or {}
   love.graphics.clear(0.045, 0.045, 0.058)
@@ -948,6 +967,19 @@ function M.draw(match, legend, flags)
   HA = M.hud_a
   if HA > 0.02 then draw_hud(state, match.defs, match.cur, legend) end
   HA = 1
+
+  -- Inside the shake transform so the dots stay on the geometry they name,
+  -- and after the HUD so nothing is drawn over the labels. The cursor is
+  -- moved into the same frame rather than the overlay out of it -- one
+  -- subtraction against re-deriving every point.
+  if M.inspect and match.defs[M.inspect] then
+    local mx, my
+    if love.mouse and love.mouse.getPosition then
+      mx, my = love.mouse.getPosition()
+      mx, my = mx - sx, my - sy
+    end
+    inspect.draw(match.defs[M.inspect], M.view[M.inspect], fonts, mx, my, W)
+  end
   love.graphics.pop()
 
   draw_notice()

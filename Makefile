@@ -4,7 +4,7 @@
 LOVE  ?= love
 LUA   ?= luajit
 
-.PHONY: check geometry test-core test-sim layers lint types run shot clean tools
+.PHONY: check geometry test-core test-sim layers lint types run shot coords clean tools
 
 check: layers lint types geometry test-core test-sim
 	@echo "" && echo "all gates passed"
@@ -59,6 +59,11 @@ run:
 TICKS ?= 240
 shot:
 	@$(LOVE) . --shot $(TICKS)
+
+# The F2 coordinate overlay, captured. BOARD=b make coords
+BOARD ?= a
+coords:
+	@$(LOVE) . --shot 1 --coords $(BOARD)
 
 clean:
 	@rm -rf build
