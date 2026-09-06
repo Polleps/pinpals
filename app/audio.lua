@@ -129,6 +129,16 @@ local KIT = {
   -- Failure. Descending, and the only long low sound in the kit.
   drain   = { dur = 0.70,  f0 = 320, f1 = 60,  wave = "tri",
               noise = 0.20, cut0 = 1600, cut1 = 260, gain = 0.50, curve = 1.6 },
+  -- §8 purgatory. Urgent and unpleasant on purpose: this is the one moment
+  -- the game asks a player to do something RIGHT NOW, and §10 wants that
+  -- legible without looking.
+  peril   = { dur = 0.50,  f0 = 240, f1 = 150, wave = "square",
+              noise = 0.18, cut0 = 1400, cut1 = 500, gain = 0.42, curve = 0.9 },
+  -- And the payoff. The only rising major interval in the kit, so a rescue
+  -- cannot be mistaken for anything else that happens.
+  rescue  = { dur = 0.55,  f0 = 420, f1 = 1180, wave = "tri",
+              noise = 0.08, cut0 = 3000, cut1 = 6000, gain = 0.55, curve = 1.5 },
+
   serve   = { dur = 0.18,  f0 = 400, f1 = 760, wave = "tri",
               noise = 0.10, cut0 = 3000, cut1 = 5000, gain = 0.35, curve = 2 },
 }
@@ -219,7 +229,12 @@ function A.consume(events, state)
     elseif ev.kind == "tube" then
       play("depart", 0.85, heat)
     elseif ev.kind == "drain" then
-      play("drain", 0.9, 1)
+      -- Not the drain sound yet: the ball is in purgatory and might come
+      -- back. Sounding the loss here would tell the players it is over while
+      -- they still have 1.9 seconds to prove otherwise.
+      play("peril", 0.9, 1)
+    elseif ev.kind == "rescue" then
+      play("rescue", 1.0, 1)
     end
   end
 end
@@ -241,6 +256,10 @@ local function phase_edges(s, heat)
       play("arrive", 0.9, heat)
     elseif s.phase == "play" and last.phase == "serve" then
       play("serve", 0.7, 1)
+    elseif s.phase == "drain" and last.phase == "purgatory" then
+      -- Now it is over. The loss lands when the window closes, not when the
+      -- ball crossed the line.
+      play("drain", 0.9, 1)
     end
     last.phase = s.phase
   end

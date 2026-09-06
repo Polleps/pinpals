@@ -93,6 +93,16 @@ C.SERVE_SPEED    = 1050        -- px/s off the plunger; enough to reach the gate
 C.SERVE_DELAY    = 0.60        -- pause before a ball is served
 C.DRAIN_DELAY    = 0.90        -- pause after a drain before re-serve
 
+-- §8 Purgatory rescue. A drained ball does not die immediately: it hangs for
+-- this long, and the PARTNER -- the player who was not holding it -- can pull
+-- it back by raising the post on the board that just lost it. "My mistake
+-- becomes your chance to be a hero, which is the best feeling co-op can
+-- produce."
+--
+-- The window has to clear the post's own travel time or the rescue is not a
+-- decision, it is a reflex test: 0.26s of that 1.9s is the post moving.
+C.PURGATORY_TIME = 1.90
+
 -- Impacts (presentation only) ------------------------------------------------
 -- sim/ reports ball contacts so app/ can sound and light them. The floor
 -- separates a hit from a lean: a ball merely resting on a surface still

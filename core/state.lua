@@ -32,7 +32,7 @@ function M.new(boards)
       -- §9. `score` is the session record; `rally_score` is what the current
       -- rally has been worth and dies with it, so `best_rally_score` is the
       -- one that says how good these two got together.
-      score = 0, rally_score = 0, best_rally_score = 0,
+      score = 0, rally_score = 0, best_rally_score = 0, rescues = 0,
     },
   }
   for id, def in pairs(boards) do
@@ -116,6 +116,7 @@ function M.update(s)
   -- One-frame signal for app/: what was just scored and where. Cleared here
   -- rather than by the reader, so nothing depends on someone remembering to.
   s.last_award = nil
+  s.rescue     = nil
   local cmds = {}
 
   if s.phase == "serve" then
@@ -123,6 +124,42 @@ function M.update(s)
     if s.timer <= 0 then
       s.phase = "play"
       cmds[#cmds+1] = { kind = "serve", board = s.active }
+    end
+
+  elseif s.phase == "purgatory" then
+    -- §8. The ball is falling but not yet gone. The partner can pull it back
+    -- by raising the post on the board that lost it -- which they could not
+    -- already have been holding, because a raised post is why the ball would
+    -- not have drained in the first place.
+    s.timer = s.timer - dt
+    local board = s.boards[s.active]
+    local post  = board and board.devices.post
+    if post and post.commanded then
+      -- Rescued. The rally survives, which is the whole point: what the two
+      -- of them built together is not thrown away by one bad bounce.
+      --
+      -- The cost is §6.2's rule applied to the biggest save in the game:
+      -- every vault charge on both boards is spent. You can keep the rally
+      -- or keep the preparation, not both, and the operator has to decide
+      -- that in well under two seconds while being shouted at.
+      local spent = 0
+      for _, b in pairs(s.boards) do
+        for name, level in pairs(b.meters) do
+          spent = spent + level
+          b.meters[name] = 0
+        end
+      end
+      s.stats.rescues = s.stats.rescues + 1
+      s.rescue = { spent = spent }
+      s.phase  = "serve"
+      s.timer  = C.SERVE_DELAY
+    elseif s.timer <= 0 then
+      -- Gone. Now the rally and everything it was worth go with it.
+      s.phase = "drain"
+      s.timer = C.DRAIN_DELAY
+      s.stats.drains = s.stats.drains + 1
+      s.stats.relay  = 0
+      score.end_rally(s.stats)
     end
 
   elseif s.phase == "drain" then
@@ -245,12 +282,12 @@ function M.consume(s, events)
       fire_links(s, ev.board, "bumper")
 
     elseif ev.kind == "drain" and s.phase == "play" then
+      -- Not dead yet (§8). The rally, the score it has earned and the drain
+      -- count all stay untouched until purgatory actually expires, so a
+      -- rescue costs the team nothing it had already earned.
       release_flippers(s)
-      s.phase = "drain"
-      s.timer = C.DRAIN_DELAY
-      s.stats.drains = s.stats.drains + 1
-      s.stats.relay  = 0
-      score.end_rally(s.stats)
+      s.phase = "purgatory"
+      s.timer = C.PURGATORY_TIME
     end
   end
 end

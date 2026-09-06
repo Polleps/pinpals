@@ -497,12 +497,52 @@ local function draw_hud(state, defs, snaps, legend)
     :format(st.best_relay, st.passes, st.drains), x, y)
 
   -- Phase banner
+  local vx, vy = M.view[active].x, M.view[active].y
+  local vw = defs[active].size.w * M.view[active].s
   if state.phase == "serve" or state.phase == "drain" then
     love.graphics.setFont(fonts.head)
     col(1, 1, 1, 0.75)
     love.graphics.printf(state.phase == "drain" and "DRAINED" or "SERVING",
-                         M.view[active].x, M.view[active].y + 300,
-                         defs[active].size.w * M.view[active].s, "center")
+                         vx, vy + 300, vw, "center")
+
+  elseif state.phase == "purgatory" then
+    -- §8. The single most urgent thing on screen, and it is addressed to the
+    -- player who is NOT holding the ball -- naming their actual key, because
+    -- roles swap constantly and "press post" is useless if you have to work
+    -- out whose post it is with 1.9 seconds on the clock.
+    local u = math.max(0, state.timer / C.PURGATORY_TIME)
+    local partner = (intents.role_of(1, active) == "operator") and 1 or 2
+    local key = legend[partner].operator_paddle
+    local flash = 0.55 + 0.45 * math.abs(math.sin(state.time * 14))
+
+    love.graphics.setColor(1, 0.30, 0.34, 0.16 * flash)
+    love.graphics.rectangle("fill", vx, vy, vw, defs[active].size.h * M.view[active].s, 8)
+
+    love.graphics.setFont(fonts.huge)
+    love.graphics.setColor(1, 0.42, 0.46, flash)
+    love.graphics.printf("SAVE IT", vx, vy + 286, vw, "center")
+    love.graphics.setFont(fonts.body)
+    love.graphics.setColor(1, 1, 1, 0.92)
+    love.graphics.printf(("P%d  press  %s"):format(partner, key:upper()),
+                         vx, vy + 330, vw, "center")
+
+    -- What it will cost, so the decision is informed rather than reflexive.
+    local charge = 0
+    for _, b in pairs(state.boards) do
+      for _, level in pairs(b.meters) do charge = charge + level end
+    end
+    if charge > 0 then
+      love.graphics.setFont(fonts.small)
+      love.graphics.setColor(1, 0.75, 0.45, 0.85)
+      love.graphics.printf(("costs the vault charge  (x%d)"):format(charge),
+                           vx, vy + 352, vw, "center")
+    end
+
+    local bw = vw * 0.6
+    love.graphics.setColor(1, 1, 1, 0.15)
+    love.graphics.rectangle("fill", vx + (vw - bw) / 2, vy + 376, bw, 8, 4)
+    love.graphics.setColor(1, 0.42, 0.46, 0.95)
+    love.graphics.rectangle("fill", vx + (vw - bw) / 2, vy + 376, bw * u, 8, 4)
   end
 
   love.graphics.setFont(fonts.small)

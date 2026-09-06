@@ -158,6 +158,11 @@ return function(H)
       A.equal("play", s.phase)
       A.equal(1, s.stats.relay)
       state.consume(s, { { kind = "drain", board = "b" } })
+      -- §8: a drained ball goes to purgatory first, and keeps the rally while
+      -- it hangs there. Nothing is lost until the window actually expires.
+      A.equal("purgatory", s.phase)
+      A.equal(1, s.stats.relay, "the rally died before the rescue window did")
+      for _ = 1, math.ceil(C.PURGATORY_TIME * C.TICK_HZ) + 2 do state.update(s) end
       A.equal("drain", s.phase)
       A.equal(0, s.stats.relay)
       A.equal(1, s.stats.best_relay, "the best relay must survive the drain")
@@ -323,6 +328,7 @@ return function(H)
       local banked = s.stats.score
       s.phase = "play"
       state.consume(s, { { kind = "drain", board = "b" } })
+      for _ = 1, math.ceil(C.PURGATORY_TIME * C.TICK_HZ) + 2 do state.update(s) end
       A.equal(0,      s.stats.relay)
       A.equal(0,      s.stats.rally_score)
       A.equal(banked, s.stats.score)
@@ -531,6 +537,7 @@ return function(H)
       clear_vault(s)
       s.phase = "play"
       state.consume(s, { { kind = "drain", board = "a" } })
+      for _ = 1, math.ceil(C.PURGATORY_TIME * C.TICK_HZ) + 2 do state.update(s) end
       A.equal(C.LIT_HITS, s.boards.a.lit.bumpers, "a drain unlit the bumpers")
       -- The drain put the match into its drain phase, where nothing scores.
       -- Serving the next ball is what resumes play, and the question is
@@ -538,6 +545,95 @@ return function(H)
       s.phase = "play"
       bump(s, 2)
       A.equal(2, s.boards.b.meters.vault, "the vault forgot its charge on a drain")
+    end)
+  end)
+
+  ---------------------------------------------------------------------------
+  -- §8 Purgatory rescue. "My mistake becomes your chance to be a hero, which
+  -- is the best feeling co-op can produce."
+  ---------------------------------------------------------------------------
+  describe("purgatory rescue", function()
+    local function to_purgatory(relay)
+      local s = state.new(boards)
+      s.phase = "play"
+      for _ = 1, (relay or 0) do
+        s.phase = "play"
+        state.consume(s, { { kind = "tube", board = s.active, speed = 900 } })
+        s.phase = "play"
+      end
+      s.phase = "play"
+      state.consume(s, { { kind = "drain", board = s.active } })
+      return s
+    end
+
+    local function run(s, seconds)
+      for _ = 1, math.ceil(seconds * C.TICK_HZ) do state.update(s) end
+    end
+
+    it("hangs the ball instead of killing it", function()
+      local s = to_purgatory(2)
+      A.equal("purgatory", s.phase)
+      A.equal(0, s.stats.drains, "the drain was counted before the window closed")
+      A.truthy(s.stats.relay > 0, "the rally died on contact with the drain")
+    end)
+
+    it("lets the partner pull it back by raising the post", function()
+      local s = to_purgatory(3)
+      local relay, score_before = s.stats.relay, s.stats.score
+      s.boards[s.active].devices.post.commanded = true    -- the rescue
+      run(s, 0.2)
+      A.equal("serve", s.phase, "raising the post did not rescue the ball")
+      A.equal(relay, s.stats.relay, "the rescue cost the rally")
+      A.equal(score_before, s.stats.score, "the rescue cost points")
+      A.equal(0, s.stats.drains, "a rescued ball still counted as a drain")
+      A.equal(1, s.stats.rescues)
+    end)
+
+    it("loses the ball if nobody acts", function()
+      local s = to_purgatory(3)
+      run(s, C.PURGATORY_TIME + 0.05)
+      A.equal("drain", s.phase)
+      A.equal(1, s.stats.drains)
+      A.equal(0, s.stats.relay)
+      A.equal(0, s.stats.rescues)
+    end)
+
+    it("spends every vault charge to do it (§6.2)", function()
+      -- The trade. A rescue is otherwise strictly good, and an operator
+      -- action that is always correct makes the operator a button-presser.
+      -- Keep the rally or keep the preparation, decided in under two seconds.
+      local s = to_purgatory(1)
+      s.boards.b.meters.vault = 7
+      s.boards[s.active].devices.post.commanded = true
+      -- s.rescue is a one-frame signal, cleared at the top of the next tick
+      -- exactly like s.last_award, so it has to be caught on the tick it
+      -- happens. sim/match.lua puts it on the presentation feed for app/.
+      local reported
+      for _ = 1, math.ceil(0.2 * C.TICK_HZ) do
+        state.update(s)
+        reported = reported or s.rescue
+      end
+      A.equal("serve", s.phase)
+      A.equal(0, s.boards.b.meters.vault, "the rescue was free")
+      A.truthy(reported, "the rescue was never signalled")
+      A.equal(7, reported.spent, "the cost was not reported for the readout")
+    end)
+
+    it("leaves the charge alone when the rescue is not made", function()
+      local s = to_purgatory(1)
+      s.boards.b.meters.vault = 7
+      run(s, C.PURGATORY_TIME + 0.05)
+      A.equal("drain", s.phase)
+      A.equal(7, s.boards.b.meters.vault, "losing the ball also burned the vault")
+    end)
+
+    it("gives the partner time to react, not just reflexes", function()
+      -- The post takes PADDLE_TRAVEL to rise. A window that does not clear it
+      -- comfortably is a reflex test rather than a decision, and §8 wants the
+      -- second one.
+      A.truthy(C.PURGATORY_TIME > C.PADDLE_TRAVEL * 4,
+        ("the rescue window is %.2fs against %.2fs of post travel")
+          :format(C.PURGATORY_TIME, C.PADDLE_TRAVEL))
     end)
   end)
 

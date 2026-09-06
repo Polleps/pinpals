@@ -84,6 +84,13 @@ function Match:_tick()
   -- it happened. Routed through the feed rather than polled off the state,
   -- because several fixed steps run per rendered frame and a poll would see
   -- only the last one -- a hot rally would silently drop most of its awards.
+  -- §8: a rescue is a one-frame signal like an award, and for the same
+  -- reason it goes on the feed rather than being polled -- several fixed
+  -- steps run per rendered frame, and a poll would miss it outright.
+  if s.rescue then
+    self:_feed({ kind = "rescue", board = s.active, spent = s.rescue.spent })
+  end
+
   local aw = s.last_award
   if aw then
     local def = self.defs[aw.board]
@@ -97,7 +104,12 @@ function Match:_tick()
 
   if s.phase == "transit" and s.transit then
     self.boards[s.transit.from]:despawn()
-  elseif s.phase == "drain" then
+  elseif s.phase == "purgatory" or s.phase == "drain" then
+    -- Purgatory despawns too, not just drain: the ball is already past the
+    -- drain line, so leaving it in the world means it re-emits a drain event
+    -- every step for the whole window while falling off the bottom of the
+    -- playfield. The ball is gone from the table; whether it comes back is
+    -- core's decision, not physics'.
     for _, b in pairs(self.boards) do b:despawn() end
   end
 end

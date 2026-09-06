@@ -204,9 +204,26 @@ would be a mechanic that silently never fires.
   few seconds. My mistake becomes your chance to be a hero, which is the best feeling co-op
   can produce.
 
-**OPEN:** Rescue window length, and whether the rescue shot is on the drained board (the
-operator triggers a device) or the partner board. Leaning: an operator device on the
-drained board, because it keeps both players' attention in one place.
+**PROVISIONAL (2026-09-06):** Rescue window length, and whether the rescue is on the
+drained board or the partner board. **Built as: 1.9s, on the drained board, using the
+post the operator already has.**
+
+- **The post is the rescue.** No new device and no new binding: the operator raises the
+  same post they use to guard. It cannot have been up already — a raised post stops
+  100% of drains, so if the ball drained, the post was down. Reaching for it is
+  therefore always a real action taken inside the window.
+- **1.9s**, which has to clear the post's own 0.26s of travel with room to spare or the
+  rescue is a reflex test rather than the decision §8 describes.
+- **The rally survives.** Relay count, rally score and the drain counter are all
+  untouched until the window actually expires. That is the point: what the two of them
+  built is not thrown away by one bad bounce.
+- **It costs every vault charge on both boards** (§7.1). Without a cost, rescuing is
+  always correct and the operator is a button-presser again (§6.2). With one, the
+  question is live and has to be answered in under two seconds while being shouted at:
+  *keep the rally, or keep the preparation?*
+
+Shared ball pool and team lives are **still not built** — a failed rescue simply
+re-serves, as before. That waits on session structure (§13.2).
 
 ## 9. Scoring
 
@@ -264,7 +281,7 @@ host-authoritative netcode sufficient instead of needing something exotic.
 2. Session structure — endless, goal-based, or run-based? (blocks scoring)
 3. Tube count and directionality
 4. Operator resource model — cooldowns only, or a meter?
-5. Rescue window mechanics
+5. ~~Rescue window mechanics~~ **PROVISIONAL, see §8**
 6. Does nudge/tilt exist, and is it an operator power?
 
 ## 14. First prototype
