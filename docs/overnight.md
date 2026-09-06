@@ -148,6 +148,8 @@ cool things to add or improve, document them, add them here.
 
 - **Purgatory rescue (§8)** · DONE (98bb9c7). Picked because it was the largest gap
   between what `design.md` marks DECIDED and what existed.
+- **Objective readout + dormant-panel flash (§7)** · DONE (0b6e034). The cross-board
+  loop worked and was invisible; now it says what it wants.
 - **Session structure (§13.2)** · NOT ATTEMPTED, deliberately. There is a score and
   nothing that ends. It is the biggest open question left, and it is also the one where
   a wrong guess costs the most: team lives, run length and whether there is an ending
@@ -592,5 +594,32 @@ approach path — where along the flipper the ball lands and with what horizonta
 
 Stopping the investigation here rather than burning more of the night on it. Five clean
 eliminations and a signposted next step is worth more than a sixth guess.
+
+### Iteration 14 — the loop says what it wants · `0b6e034`
+
+The cross-board loop worked and was **invisible**. A player saw a score, a multiplier,
+and two numbers moving off to the side, with nothing saying *charge the vault, pass,
+cash it, come home to lit bumpers*. Pinball has always solved this with a line of text
+telling you what's lit, and §7 asks for it specifically.
+
+| state | readout |
+|---|---|
+| fresh ball on Foundry | CHARGE THE VAULT ON GLASSHOUSE |
+| Foundry, vault part-charged | PASS TO CLEAR THE VAULT ×5 |
+| Foundry, vault full | PASS — VAULT IS FULL *(urgent)* |
+| on Glasshouse, vault charged | CLEAR THE VAULT ×7 |
+| bumpers lit | BUMPERS LIT ×5 (9 left) *(urgent)* |
+
+Derived from the board data's `links` rather than hardcoded, so a new cross-board
+relationship gets a readout for free and can't silently become a mechanic nobody is
+told about. Coloured by where it wants doing — amber for "act here", blue for "this
+wants a pass" — so both players can see whose problem it is without reading it.
+
+Lit bumpers outrank a full vault deliberately: a charged vault waits, a lit board is a
+timer running out, and the readout should point at the thing that expires.
+
+Plus the §7 panel flash — a board outlines itself when its cross-board state changes,
+so a charge landing on the *dormant* board is visible there rather than being something
+you have to remember.
 
 *(iterations append here)*
