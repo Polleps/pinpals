@@ -106,21 +106,32 @@ from realistic incoming trajectories, then tune.
 §5.1 gets recording free from the intent stream. A session that writes intents + stats
 turns Polle's morning play into a measurement instead of an impression.
 
-### 13. prototype.md now describes a game that no longer exists  ·  TODO
+### 13. prototype.md now describes a game that no longer exists  ·  DONE (9c7edd7)
 
 §1 still says "No scoring, no modes, no cross-board unlocks" and §4 lists provisional
 calls that have since been made and measured. The doc has been patched section by
 section as the night went on; it needs one honest pass to describe what is actually
 there, so Polle reads the game rather than its history.
 
-### 14. What sets Foundry's 20ms timing window?  ·  TODO
+### 14. What sets Foundry's 20ms timing window?  ·  OPEN (two suspects eliminated)
 
-Receiving on Foundry has a half-peak timing window of 20ms against Glasshouse's 50ms —
-about one 60fps frame. The obvious suspect was the bumper cluster randomising the ball
-on its way down; **ruled out**, removing it raises the peak 63% → 72% and leaves the
-window at 20ms. Candidates remaining: the entry point's position relative to the ramp,
-the descent path down the left orbit, the ramp mouth's flare width. Worth finding,
-because 20ms is close to the floor of what a person can time consistently.
+Receiving on Foundry has a usable band of roughly 5–25ms before contact, against
+Glasshouse's 15–70ms. Both have a hard cliff at lead 0 — flip late and nothing
+happens, which is just pinball. The unexplained part is the **width**, not the
+position.
+
+**Ruled out by measurement:**
+
+- *The bumper cluster* randomising the ball on the way down. Removing it raises the
+  peak 63% → 72% and leaves the window at 20ms.
+- *The drain gap.* Foundry's is 27.6px vs Glasshouse's 43.6px. Widening Foundry to
+  match leaves the window at 20ms and lowers the peak to 53%.
+- *A truncated sweep.* Negative leads (ball already on the flipper) score 0% on both
+  boards, so Foundry's peak is not sitting off the left edge of the old grid.
+
+**Still to try:** the entry point's position relative to the ramp, the descent path
+down the left orbit, the ramp mouth's flare width. Worth finding — 20ms is close to
+the floor of what a person can time consistently.
 
 ### 11+ Think of other ways to improve the game  ·  TODO
 
@@ -493,5 +504,27 @@ follows, which is what makes a session replayable later (§5.1).
 Verified by generating a real log from simulated play and reading it, rather than
 waiting for a human to produce one — a capture nobody has looked at is a capture nobody
 knows is broken.
+
+### Iteration 11 — docs, and two suspects eliminated · `9c7edd7`
+
+**`prototype.md` now describes the game that exists.** It still opened with "Exactly
+§14's list, and nothing else. No scoring, no modes, no cross-board unlocks" — all
+three of which the night added. §4 still called the board identities "a guess with a
+shape" after they'd been measured and found backwards. §5 still listed no audio, empty
+playfields, a thin Glasshouse and an absolute post as open, all four closed.
+
+A doc describing a previous version of the game is worse than no doc: it's confidently
+wrong exactly where someone would trust it.
+
+What's genuinely still open is now stated louder — session structure (§13.2) untouched
+and now the largest question in the file, Foundry's receiving window, and the fact that
+**none of the overnight work has been played.** §6 gained three specific things to
+attend to at the keyboard, chosen because they're where the measurements point and
+where they stop being able to help.
+
+On item 14, two suspects eliminated cleanly (bumpers, drain gap) plus a methodological
+check: negative leads score 0% on both boards, so Foundry's peak isn't sitting off the
+edge of a truncated sweep. The band is 5–25ms vs 15–70ms; the width is what's
+unexplained, not the position.
 
 *(iterations append here)*
