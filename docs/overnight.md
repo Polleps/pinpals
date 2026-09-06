@@ -168,33 +168,35 @@ calls that have since been made and measured. The doc has been patched section b
 section as the night went on; it needs one honest pass to describe what is actually
 there, so Polle reads the game rather than its history.
 
-### 14. What sets Foundry's 20ms timing window?  ·  OPEN (five suspects eliminated)
+### 14. What sets Foundry's 20ms timing window?  ·  ANSWERED (lever still open)
 
-Receiving on Foundry has a usable band of roughly 5–25ms before contact, against
-Glasshouse's 15–70ms. Both have a hard cliff at lead 0 — flip late and nothing happens,
-which is just pinball. The unexplained part is the **width**, not the position.
+**It is where the ball meets the flipper.**
 
-**Ruled out by measurement:**
+| board | n | p10 | p50 | p90 | \|vx\| p50 |
+|---|---|---|---|---|---|
+| Foundry | 119 | 0.12 | **0.59** | 1.00 | 218 |
+| Glasshouse | 120 | 0.12 | **1.01** | 1.02 | 399 |
 
-| suspect | result |
-|---|---|
-| The bumper cluster randomising the descent | Removing it: peak 63% → 72%, window unchanged at 20ms |
-| The drain gap (27.6px vs 43.6px) | Widening Foundry to match: window unchanged, peak drops to 53% |
-| A truncated sweep hiding the peak | Negative leads score 0% on both boards |
-| Arrival speed | At matched speeds the two boards behave almost identically |
-| Balls reaching the tube without a flip | 0% on both boards with nobody flipping |
+Glasshouse funnels received balls onto the flipper **tip** — half land past 1.01 of the
+flipper's length, 90% past 1.02. Foundry scatters them along it, median 0.59,
+mid-flipper. The tip is where the flipper moves fastest and imparts the most energy,
+which is also why Glasshouse peaks at 85% against Foundry's 63%.
 
-**Found instead, and worth knowing on its own:** the window narrows sharply with
-arrival speed on *both* boards — 40ms at 150px/s down to 10ms at 850px/s
-(`tests/probe_speed_window.lua`). Since §9 raises arrival speed by up to 55% with relay
-heat, **a hot rally is harder to hold for this reason as well as the intended one.**
-That is either a happy accident or a difficulty spike nobody chose; a human at the
-keyboard should say which.
+The mechanism is **horizontal carry**. Glasshouse's ball arrives with nearly twice the
+horizontal speed, crosses the board during its descent, and lands on the far flipper's
+tip consistently. Foundry's dribbles down onto the near flipper wherever it happens to
+land — and a shot whose contact point varies that much cannot have one right flip time.
 
-**Where to look next.** Dropping the ball straight onto the flipper reproduces
-Foundry's real 20ms but *not* Glasshouse's real 50ms. So the difference is in the
-approach path — where along the flipper the ball lands, and with what horizontal
-velocity — not in the flipper or the ramp. That is the next thing to instrument.
+**Ruled out along the way:** the bumper cluster, the drain gap, arrival speed, balls
+passing without a flip, a truncated sweep, and now the entry angle. Steepening Foundry's
+entry (dir.x 0.32 → 0.60 → 0.90) makes the ball meet the left wall sooner and arrive
+with *less* carry (|vx| 218 → 187 → 114), pushing contact toward the pivot and dropping
+the peak to 48% at 0.90.
+
+**What would work** is a descent that carries the ball across — a shallower left orbit,
+or a deflector rail like the one Glasshouse has. That is a layout change, and layout
+changes tonight have each needed a full round of re-measurement, so it is worth doing
+awake rather than at 02:30.
 
 ### 11+ Think of other ways to improve the game  ·  IN PROGRESS
 
@@ -741,5 +743,24 @@ A 60fps frame is **26µs, 0.2% of 16.7ms**; the `MAX_CATCHUP` worst case is 2.3%
 `technical-choices.md` §3 has asserted "performance is not the discriminator" since day
 one and now cites numbers instead. A loose gate (a sim step under 25% of its budget,
 forty times the measured cost) guards against someone adding an O(n²) loop.
+
+### Iteration 17 — item 14 answered · `probe_approach`
+
+**It is where the ball meets the flipper.** Glasshouse funnels received balls onto the
+flipper tip (p50 = 1.01 of its length); Foundry scatters them mid-flipper (p50 = 0.59).
+The tip is where the flipper moves fastest, which also explains the peak-rate gap. The
+cause is horizontal carry — Glasshouse's ball arrives with nearly twice the sideways
+speed, crosses the board during descent and lands consistently; Foundry's dribbles onto
+the near flipper anywhere. A shot whose contact point varies that much can't have one
+right flip time.
+
+Six suspects eliminated in total across iterations 13 and 17, the last being the entry
+angle — steepening it makes things *worse*, because the ball meets the left wall sooner
+and arrives with less carry, not more.
+
+The fix is a descent that carries the ball across (a shallower left orbit, or a
+deflector like Glasshouse's rail). That's a layout change, and every layout change
+tonight has needed a full round of re-measurement to trust, so I've left it for
+daylight rather than starting one at 02:30.
 
 *(iterations append here)*
