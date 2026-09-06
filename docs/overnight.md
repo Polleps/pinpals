@@ -2,9 +2,10 @@
 
 > ## Read this first
 >
-> **15 substantive commits on `overnight`, off `main` at `9a5060b`. `main` is untouched.**
-> Gates: 80 core, 36 sim, all green, `make check` in 3.6s. One commit per change, so
-> anything here can be reverted on its own.
+> **25 substantive commits on `overnight`, off `main` at `9a5060b`. `main` is untouched.**
+> Gates: 97 core tests, 38 sim tests, all green, `make check` in 3.6s. One commit per
+> change, so anything here can be reverted on its own. (Started the night at 29 core,
+> 25 sim.)
 >
 > ### The thing that mattered most
 >

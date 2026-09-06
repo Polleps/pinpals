@@ -19,6 +19,11 @@ Since this is a game, performance might take precedence over code quality in cri
 
 ## Tooling
 
+`./scripts/verify_history.sh` runs `make check` at every commit on the branch, in a
+detached worktree. Worth running before handing work over: a commit message claiming
+green is worth exactly as much as the shell that produced it, and `make check | tail &&
+git commit` silently tests whether `tail` succeeded.
+
 `make check` is the only gate that matters: layers, lint, types, static board geometry,
 core tests, headless physics, and a 60s integration soak. ~3.6s. Run it before claiming
 anything is done. `make run` plays; `make shot TICKS=N` renders a frame to a PNG —
