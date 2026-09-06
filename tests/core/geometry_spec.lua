@@ -87,7 +87,48 @@ return function(H)
     end)
   end)
 
+  describe("catches the target-bank bugs from 2026-09-06", function()
+    -- Board B is the one with a bank, so these mutate it rather than A.
+    local function broken_b(mutate)
+      local b = copy(boards.b)
+      mutate(b)
+      return b
+    end
+
+    it("three targets authored closer together than they are wide", function()
+      -- This shipped in the first draft of Glasshouse's bank: 34px targets
+      -- spaced 33px apart. They overlapped into a single bar on screen and
+      -- formed throats between them in the physics, and only a screenshot
+      -- gave it away -- the wedge check did not cover targets at all, which
+      -- is why it does now.
+      local b = broken_b(function(x)
+        x.targets = {
+          { x = 280, y = 388, w = 34, h = 9, angle = 0.558, bank = "vault" },
+          { x = 308, y = 405, w = 34, h = 9, angle = 0.558, bank = "vault" },
+          { x = 336, y = 422, w = 34, h = 9, angle = 0.558, bank = "vault" },
+        }
+      end)
+      A.truthy(kinds(b).wedge, "overlapping targets were not reported")
+    end)
+
+    it("a target parked against a wall", function()
+      -- Same failure as a bumper against a wall, and easier to author by
+      -- accident because a target is small and its angle is easy to get wrong.
+      local b = broken_b(function(x)
+        x.targets = { { x = 366, y = 400, w = 28, h = 9, angle = 0, bank = "vault" } }
+      end)
+      A.truthy(kinds(b).wedge, "a target one ball-width from the wall was not reported")
+    end)
+  end)
+
   describe("does not cry wolf", function()
+    it("a properly spaced bank is not a wedge", function()
+      -- The shipped bank: 28px targets 92px apart. If this trips, the check
+      -- is too strict to author a bank with at all.
+      local b = copy(boards.b)
+      A.truthy(not kinds(b).wedge, "the shipped target bank was reported as a wedge")
+    end)
+
     it("a peak is not a bowl", function()
       -- The ramp roof is a chevron. Sheds the ball; must not be flagged.
       local b = broken(function(x) x.walls[#x.walls+1] = { 60,400, 90,360, 120,400 } end)

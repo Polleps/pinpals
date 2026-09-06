@@ -767,4 +767,64 @@ return function(H)
     end)
   end)
 
+  ---------------------------------------------------------------------------
+  -- §7 wiring validation. A link that points at nothing is a mechanic that
+  -- silently never fires, which is the worst failure available to something
+  -- two players are supposed to be building toward together.
+  ---------------------------------------------------------------------------
+  describe("cross-board wiring validation", function()
+    local function copy(v)
+      if type(v) ~= "table" then return v end
+      local t = {}
+      for k, x in pairs(v) do t[k] = copy(x) end
+      return t
+    end
+
+    local function mutated(f)
+      local set = { a = copy(boards.a), b = copy(boards.b) }
+      f(set)
+      local ok, errs = validate.set(set)
+      return ok, table.concat(errs or {}, " | ")
+    end
+
+    it("accepts the shipped boards", function()
+      local ok, why = mutated(function() end)
+      A.truthy(ok, "the real board set does not validate: " .. why)
+    end)
+
+    it("rejects a link to a board that does not exist", function()
+      local ok, why = mutated(function(set)
+        set.a.links[1].charges.board = "z"
+      end)
+      A.truthy(not ok, "a link to board 'z' was accepted")
+      A.truthy(why:find("no such board"), "wrong complaint: " .. why)
+    end)
+
+    it("rejects a charge no bank will ever cash", function()
+      -- The meter name has to match a bank on the destination or the charge
+      -- accumulates somewhere nothing reads.
+      local ok, why = mutated(function(set)
+        set.a.links[1].charges.meter = "strongroom"
+      end)
+      A.truthy(not ok, "a charge into a nonexistent bank was accepted")
+      A.truthy(why:find("no 'strongroom' bank"), "wrong complaint: " .. why)
+    end)
+
+    it("rejects lighting something the destination does not have", function()
+      -- This one caught a real experiment mid-flight: removing Foundry's
+      -- bumpers to test a hypothesis left Glasshouse lighting a cluster that
+      -- no longer existed, and the loader refused the board set rather than
+      -- running a game with a dead link in it.
+      local ok, why = mutated(function(set) set.a.bumpers = {} end)
+      A.truthy(not ok, "lighting a board with no bumpers was accepted")
+      A.truthy(why:find("no bumpers to light"), "wrong complaint: " .. why)
+    end)
+
+    it("rejects a target with no bank", function()
+      local ok, why = mutated(function(set) set.b.targets[1].bank = nil end)
+      A.truthy(not ok, "a bankless target was accepted")
+      A.truthy(why:find("bank"), "wrong complaint: " .. why)
+    end)
+  end)
+
 end
