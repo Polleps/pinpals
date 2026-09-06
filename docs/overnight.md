@@ -1251,7 +1251,7 @@ were looking at. Two changes, both of them tooling rather than game:
 
 **`love .` now reloads the boards when a board file changes.** It watches contents
 rather than mtime, because LÖVE's modtime is whole seconds and two saves inside one
-second is exactly what nudging a coordinate looks like. `--no-hot` turns it off, `F5`
+second is exactly what nudging a coordinate looks like. `--no-hot` turns it off, `3`
 forces one.
 
 **A reload that fails changes nothing.** This is the part that decides whether the
@@ -1273,7 +1273,7 @@ flipper's arc, throats narrower than the ball — and puts any defect on screen.
 pure Lua and takes microseconds, and it is the check most likely to have something to
 say about an edit that just moved a wall.
 
-**`F2` draws every coordinate the data file names.** A labelled 32px grid, a dot on
+**`2` draws every coordinate the data file names.** A labelled 32px grid, a dot on
 each point, the cursor's own board position, and a hover readout that names the point
 in full (`walls[2][3]`) so you know which line you are looking at. The rule it follows
 is that it labels *exactly* the numbers that appear in `data/tables/*.lua` and no

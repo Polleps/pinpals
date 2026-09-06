@@ -4,7 +4,7 @@
 ---   love . --shot N   run N fixed steps, screenshot, quit (§7 visual check)
 ---
 --- Play mode watches data/tables/*.lua and reloads the boards when one
---- changes (--no-hot turns that off; F5 forces one). Board layouts are data,
+--- changes (--no-hot turns that off; key 3 forces one). Board layouts are data,
 --- and every board bug so far has been a coordinate -- a coordinate you can
 --- only judge by looking at it, which means the loop that matters is edit,
 --- save, look. Restarting the game for each nudge put a build in the middle
@@ -34,6 +34,7 @@ end
 local match, render, input, audio, fx, record, boards
 local hot = require("app.hotreload")
 local debug_on = false
+local paused = false
 local shot_done = false
 
 --- The window in conf.lua is a floor, not a choice: 1000x780 was sized around
@@ -190,13 +191,29 @@ function love.update(dt)
   local changed = hot.poll(dt)
   if changed then reload_boards(changed) end
 
-  match:advance(dt)
-  -- Drained once and shared: audio and fx must see the same events, and
-  -- whichever called drain_events() second would otherwise see none.
-  local events = match:drain_events()
-  audio.update(match, events)
-  fx.update(match, events, dt)
-  record.update(match, events)
+  -- P freezes the simulation and everything downstream of it -- sound,
+  -- effects and the session log all follow the tick, and a recording that
+  -- counted the minutes spent staring at a still board would report the
+  -- operator asleep at a device they were in fact reading.
+  --
+  -- Two things deliberately keep running. The camera, because TAB swaps the
+  -- inspected board while paused and the view has to be able to travel. And
+  -- the file watcher, because a held ball next to the geometry that dropped
+  -- it is exactly when you want to edit the board.
+  --
+  -- Intents keep queueing rather than being dropped: a flipper pressed before
+  -- the pause and released during it must see both halves, or it comes back
+  -- stuck up. Held into the resume, it flips on the first tick, which is what
+  -- the player asked for.
+  if not paused then
+    match:advance(dt)
+    -- Drained once and shared: audio and fx must see the same events, and
+    -- whichever called drain_events() second would otherwise see none.
+    local events = match:drain_events()
+    audio.update(match, events)
+    fx.update(match, events, dt)
+    record.update(match, events)
+  end
   render.update_camera(match.state, boards, dt)
 end
 
@@ -219,7 +236,8 @@ function love.draw()
     return
   end
 
-  render.draw(match, { input.legend(1), input.legend(2) }, { debug = debug_on })
+  render.draw(match, { input.legend(1), input.legend(2) },
+             { debug = debug_on, paused = paused })
 end
 
 ---------------------------------------------------------------------------
@@ -229,14 +247,18 @@ end
 function love.keypressed(key)
   if mode ~= "play" then return end
   if key == "escape" then love.event.quit() return end
-  if key == "f1" then debug_on = not debug_on return end
-  if key == "f2" then render.toggle_inspect(match.state.active) return end
+  -- Number row rather than function keys: on a Mac laptop every F-key is a
+  -- chord with fn, and a tool you reach for between one nudge and the next has
+  -- to cost one finger.
+  if key == "1" then debug_on = not debug_on return end
+  if key == "2" then render.toggle_inspect(match.state.active) return end
+  if key == "p" then paused = not paused return end
   if key == "tab" then render.swap_inspect() return end
-  if key == "f5" then
+  if key == "3" then
     -- A manual reload re-stamps the watcher too, or the same edit comes back
     -- a quarter of a second later as an automatic one and restarts the match
     -- a second time.
-    reload_boards("F5")
+    reload_boards("key 3")
     hot.resync()
     return
   end

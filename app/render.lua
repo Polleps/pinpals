@@ -854,8 +854,27 @@ local function draw_hud(state, defs, snaps, legend)
 
   love.graphics.setFont(fonts.small)
   col(1, 1, 1, 0.28)
-  love.graphics.print("R restart   F1 debug   F2 coords   F5 reload   ESC quit",
+  love.graphics.print("R restart   P pause   1 debug   2 coords   3 reload   ESC quit",
                       M.hud_x, H - 26)
+end
+
+--- A paused game is one frame short of a hung one, and the difference has to
+--- be legible instantly. It sits on the nameplate line, opposite the board's
+--- name and clear of the playfield: pause is mostly used *with* the coordinate
+--- overlay -- hold the ball still, read where it is against the geometry --
+--- and a banner across the board would cover the thing being read.
+local function draw_paused(defs, id)
+  local v = M.view[id]
+  local text = "|| PAUSED"
+  local w = fonts.small:getWidth(text)
+  local x = v.x + defs[id].size.w * v.s - w - 10
+  local y = v.y - 17
+
+  love.graphics.setColor(0.03, 0.03, 0.04, 0.85)
+  love.graphics.rectangle("fill", x - 6, y - 1, w + 12, 15, 3)
+  love.graphics.setFont(fonts.small)
+  love.graphics.setColor(1, 0.86, 0.35, 1)
+  love.graphics.print(text, x, y)
 end
 
 ---------------------------------------------------------------------------
@@ -941,7 +960,8 @@ end
 
 ---------------------------------------------------------------------------
 
----@param flags table|nil { debug = boolean, } -- inspect lives in M.inspect
+---@param flags table|nil { debug = boolean, paused = boolean }; the
+---       coordinate overlay is a mode rather than a frame flag: M.inspect
 function M.draw(match, legend, flags)
   flags = flags or {}
   love.graphics.clear(0.045, 0.045, 0.058)
@@ -982,6 +1002,10 @@ function M.draw(match, legend, flags)
   end
   love.graphics.pop()
 
+  -- Outside the shake, which is frozen along with everything else that drives
+  -- it, and drawn on the board the eye is on: the inspected one when there is
+  -- one, otherwise the one with the ball.
+  if flags.paused then draw_paused(match.defs, M.inspect or state.active) end
   draw_notice()
 
   if flags.debug then

@@ -27,10 +27,12 @@ git commit` silently tests whether `tail` succeeded.
 `love .` watches `data/tables/*.lua` and reloads the boards on save -- a board that
 will not compile or will not validate leaves the running game alone and puts the
 error on screen, so a typo mid-edit cannot end a playtest. `--no-hot` turns the
-watcher off; `F5` forces a reload. In-game keys: `F1` debug readout, `F2` the
-coordinate overlay (every number the data file names, plus the cursor's own
-position; `TAB` swaps which board it reads), `R` restart. `make coords BOARD=b`
-captures that overlay to a PNG.
+watcher off. In-game keys: `P` pause (freezes the simulation, not the camera or
+the watcher), `1` debug readout, `2` the coordinate overlay (every number the data
+file names, plus the cursor's own position; `TAB` swaps which board it reads),
+`3` force a reload, `R` restart. The number row rather than function keys: on a
+Mac every F-key is a chord with fn. `make coords BOARD=b` captures that overlay
+to a PNG.
 
 `make check` is the only gate that matters: layers, lint, types, static board geometry,
 core tests, headless physics, and a 60s integration soak. ~3.6s. Run it before claiming
