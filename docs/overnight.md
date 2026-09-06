@@ -216,6 +216,7 @@ cool things to add or improve, document them, add them here.
 - **Restart bug in the recorder** · DONE. Pressing R threw away the run it ended.
 - **Gamepad disconnect bug** · DONE. Unplugging one pad renumbered the other player.
 - **Held device key lost on role swap** · DONE (f1407a4). A released gate stayed open.
+- **Tests for the night's validators** · DONE. They had caught real bugs and had no tests.
 - **Session structure (§13.2)** · NOT ATTEMPTED, deliberately. There is a score and
   nothing that ends. It is the biggest open question left, and it is also the one where
   a wrong guess costs the most: team lives, run length and whether there is an ending
@@ -902,5 +903,25 @@ The real bug is narrower than "devices persist": a **release has no owner**. A p
 belongs to the board that was active when it happened, and so does its release — not to
 whatever board is active by the time the finger comes up, which would close a gate on the
 wrong table. Held keys now remember where they went.
+
+### Iteration 24 — validators with no tests of their own
+
+`geometry_spec` opens with "Every case below is a bug that actually shipped… The
+validator earns its place by catching them; if it cannot, it is decoration." Every check
+from the 5th has a reconstruction. **The checks I added last night had none** —
+target-to-wall, target-to-target, and the whole of the §7 link validation.
+
+Both had already caught real bugs in flight, which is precisely why they needed tests:
+nothing recorded that they work, so a later edit could delete either and every gate would
+stay green.
+
+Reconstructed: three targets 34px wide spaced 33px apart (the first draft of Glasshouse's
+bank, which overlapped into one bar and was caught only by a screenshot); a target parked
+against a wall; a link naming a board that doesn't exist; a charge into a bank nothing
+cashes; lighting a cluster the destination hasn't got (this one refused a real experiment
+mid-flight last night); and a target with no bank.
+
+Plus a cry-wolf case per the existing section — the shipped bank must *not* be flagged,
+or the check is too strict to author a bank with at all.
 
 *(iterations append here)*
