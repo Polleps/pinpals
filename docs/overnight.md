@@ -206,6 +206,7 @@ cool things to add or improve, document them, add them here.
 - **Objective readout + dormant-panel flash (§7)** · DONE (0b6e034). The cross-board
   loop worked and was invisible; now it says what it wants.
 - **Integration soak** · DONE (9d6b4cd). Found that the rescue was firing for free.
+- **Frame cost measured** · DONE (e68d9bd). Nothing added tonight was costed until now.
 - **Session structure (§13.2)** · NOT ATTEMPTED, deliberately. There is a score and
   nothing that ends. It is the biggest open question left, and it is also the one where
   a wrong guess costs the most: team lives, run length and whether there is an ending
@@ -713,5 +714,32 @@ A 60-second version of the soak is now part of `make check` (2.0s → 3.6s): one
 while playing, meters and lit counters in range, rally score never exceeding the
 session, the objective never empty, the feed never past its cap. It's the only test
 that runs everything at once.
+
+### Iteration 16 — handoff, and costing the frame · `1ad472e`, `e68d9bd`
+
+Two things, both about not leaving loose ends.
+
+**A read-this-first at the top of this file.** Fifteen iteration entries is the right
+amount of detail and the wrong thing to open at breakfast. The summary leads with the
+finding that mattered most (board A could reach exactly one place), says what to try
+first, and says plainly what still needs a human. While writing it I claimed six §13
+questions had been answered; checking `design.md`, it's two. Corrected before it shipped.
+
+**Frame cost, which nothing tonight had.** Impact events, particles, a trail, a
+synthesized audio kit, a recorder and an objective readout evaluated every draw all
+landed on the per-frame path unmeasured. If the game had started dropping frames, every
+one of them would have made it worse and the cause would have been a guess.
+
+| per call | µs | share of budget |
+|---|---|---|
+| sim step (4166µs budget at 240 Hz) | 6.3 | 0.15% |
+| `fx.update` | 0.5 | 0.00% |
+| `record.update` | 0.2 | 0.00% |
+| `objective.current` | 0.5 | 0.00% |
+
+A 60fps frame is **26µs, 0.2% of 16.7ms**; the `MAX_CATCHUP` worst case is 2.3%.
+`technical-choices.md` §3 has asserted "performance is not the discriminator" since day
+one and now cites numbers instead. A loose gate (a sim step under 25% of its budget,
+forty times the measured cost) guards against someone adding an O(n²) loop.
 
 *(iterations append here)*
