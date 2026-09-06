@@ -13,6 +13,9 @@ local M = {}
 
 local OTHER = { a = "b", b = "a" }
 
+--- Which device each operator action drives.
+local DEVICE_OF = { operator_gate = "gate", operator_paddle = "post" }
+
 ---@param boards table<string, table>
 ---@return table state
 function M.new(boards)
@@ -34,6 +37,9 @@ function M.new(boards)
       -- one that says how good these two got together.
       score = 0, rally_score = 0, best_rally_score = 0, rescues = 0,
     },
+    -- Which board each player's held operator key was pressed on, so its
+    -- release can follow it across a role swap. Plain data (§5.2).
+    held = { [1] = {}, [2] = {} },
   }
   for id, def in pairs(boards) do
     local b = {
@@ -72,23 +78,46 @@ end
 ---@param s table
 ---@param it Intent
 function M.apply_intent(s, it)
-  local role = intents.role_of(it.player, s.active)
+  local role  = intents.role_of(it.player, s.active)
   local board = s.boards[s.active]
   if not board then return end
 
   if role == "flipper" then
-    if s.phase ~= "play" then return end        -- no ball, no flippers
-    if it.action == "flip_left"  then board.flippers.left  = it.pressed end
-    if it.action == "flip_right" then board.flippers.right = it.pressed end
-  else
-    -- The operator acts on the active board at all times, including during
-    -- transit: that 800ms is the sender's chance to prepare the landing.
-    if it.action == "operator_gate" then
-      local d = board.devices.gate;  if d then d.commanded = it.pressed end
-    elseif it.action == "operator_paddle" then
-      local d = board.devices.post;  if d then d.commanded = it.pressed end
+    if it.action == "flip_left" or it.action == "flip_right" then
+      if s.phase ~= "play" then return end      -- no ball, no flippers
+      if it.action == "flip_left"  then board.flippers.left  = it.pressed end
+      if it.action == "flip_right" then board.flippers.right = it.pressed end
+      return
     end
+    -- A flipper still has to be able to LET GO of a device they were holding
+    -- as operator. Falling through here instead discards the release, which
+    -- is the bug below.
+    if it.pressed or not s.held[it.player][it.action] then return end
   end
+
+  -- The operator acts on the active board at all times, including during
+  -- transit: that 800ms is the sender's chance to prepare the landing.
+  --
+  -- A release, though, belongs to the board the PRESS went to. Roles swap on
+  -- every crossing, so a player can press the gate as operator on board A and
+  -- still be holding it when the ball lands on B and makes them the flipper.
+  -- Routing that release to the active board would close a gate on the wrong
+  -- table; discarding it -- which is what this did -- left board A's gate
+  -- commanded open forever with the player's finger off the key, and §6.2
+  -- makes an open gate close the safe return loop. It righted itself only
+  -- after a full press-and-release once that player was the operator again.
+  --
+  -- §7 still holds: a press-and-release BEFORE passing leaves the board set
+  -- up the way the operator left it, because the release lands on the board
+  -- that was prepared.
+  local target = it.pressed and s.active or s.held[it.player][it.action]
+  s.held[it.player][it.action] = it.pressed and s.active or nil
+  local tboard = target and s.boards[target]
+  if not tboard then return end
+
+  local id = DEVICE_OF[it.action]
+  local d  = id and tboard.devices[id]
+  if d then d.commanded = it.pressed end
 end
 
 ---@param s table

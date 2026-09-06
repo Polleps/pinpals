@@ -186,6 +186,43 @@ return function(H)
       for _ = 1, C.TICK_HZ do state.update(s) end
       A.truthy(s.boards.a.devices.gate.commanded, "board A forgot what the operator did")
     end)
+
+    it("still lets a player let go of a device after their role swaps",
+       function()
+      -- The other half, and it was broken. The operator acts on the ACTIVE
+      -- board, so a player can press the gate on board A and still be holding
+      -- it when the ball lands on B and makes them the flipper. That release
+      -- used to be discarded -- a flipper has no operator actions -- leaving
+      -- board A's gate commanded open forever with their finger off the key.
+      -- §6.2 makes an open gate close the safe return loop, so the ball came
+      -- back later to a board whose safe return had quietly gone.
+      local s = state.new(boards); s.phase = "play"
+      state.apply_intent(s, intents.new(2, "operator_gate", true, 0))
+      A.truthy(s.boards.a.devices.gate.commanded)
+
+      state.consume(s, { { kind = "tube", board = "a", speed = 900 } })
+      for _ = 1, C.TICK_HZ do state.update(s) end
+      A.equal("b", s.active)
+      A.equal("flipper", intents.role_of(2, s.active), "the role did not swap")
+
+      state.apply_intent(s, intents.new(2, "operator_gate", false, 1))
+      A.truthy(not s.boards.a.devices.gate.commanded,
+               "board A's gate stayed open after the player let go")
+    end)
+
+    it("sends a release to the board it was pressed on, not the active one",
+       function()
+      -- Routing it to whatever board is active now would close a gate on the
+      -- wrong table, which is a different bug wearing the same shape.
+      local s = state.new(boards); s.phase = "play"
+      state.apply_intent(s, intents.new(2, "operator_gate", true, 0))
+      state.consume(s, { { kind = "tube", board = "a", speed = 900 } })
+      for _ = 1, C.TICK_HZ do state.update(s) end
+      -- Board B's gate was never touched and must stay that way.
+      state.apply_intent(s, intents.new(2, "operator_gate", false, 1))
+      A.truthy(not s.boards.b.devices.gate.commanded,
+               "the release closed a gate on the wrong board")
+    end)
   end)
   ---------------------------------------------------------------------------
   -- §5 layering. Impacts are presentation: sim/ reports them so app/ can
