@@ -87,6 +87,25 @@ time. The 11.x line is the long-stable one; if a 12.x stable is available, check
 A 2D pinball game with one ball will not stress any of these three engines. LuaJIT plus
 Box2D holds a 240 Hz fixed timestep with a full table of static geometry without noticing.
 
+**Measured, 2026-09-06** (`tests/probe_perf.lua`), after a night of additions all landing
+on the per-frame path — impact events, particles and a ball trail, a synthesized audio
+kit, a session recorder, an objective readout evaluated every draw:
+
+| per call | microseconds | share of budget |
+|---|---|---|
+| sim step (budget 4166µs at 240 Hz) | 6.3 | 0.15% |
+| `fx.update` | 0.5 | 0.00% |
+| `record.update` | 0.2 | 0.00% |
+| `objective.current` | 0.5 | 0.00% |
+
+A 60fps frame is four sim steps plus one pass of the rest: **26µs, 0.2% of 16.7ms**.
+Even the `MAX_CATCHUP` worst case of 60 steps in one frame comes to 2.3%. Rendering is
+not in these numbers (it needs a window), but it is flat 2D primitives.
+
+The claim above is therefore no longer an assertion. There is roughly three orders of
+magnitude of headroom on the simulation side, which is worth knowing before anyone
+optimises something that costs nothing.
+
 The real risk is **simulation quality, not throughput**: tunneling, contact jitter,
 inconsistent restitution. That's a physics-engine and timestep problem, addressed in §4.
 

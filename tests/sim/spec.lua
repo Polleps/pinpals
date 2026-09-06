@@ -679,6 +679,29 @@ return function(H)
     end)
   end)
 
+  describe("performance headroom (§3)", function()
+    it("leaves the fixed timestep an order of magnitude of room", function()
+      -- technical-choices.md §3 asserts "performance is not the
+      -- discriminator". Measured: a sim step costs ~6.3us against a 4166us
+      -- budget at 240 Hz, and a whole 60fps frame including fx, recording and
+      -- the objective readout is ~26us. See tests/probe_perf.lua.
+      --
+      -- The bound here is deliberately loose -- 25% of the step budget, forty
+      -- times the measured cost -- because this runs on whatever machine an
+      -- agent happens to be on. It is a tripwire for someone adding an O(n^2)
+      -- loop to the step, not a benchmark.
+      local m = Match.new(boards)
+      m:run(400)
+      local t0 = os.clock()
+      local n = 4000
+      m:run(n)
+      local per = (os.clock() - t0) / n
+      A.truthy(per < C.FIXED_DT * 0.25,
+        ("a sim step costs %.0fus of its %.0fus budget")
+          :format(per * 1e6, C.FIXED_DT * 1e6))
+    end)
+  end)
+
   describe("everything running at once", function()
     it("holds its invariants through a minute of random play", function()
       -- Scoring, cross-board meters, purgatory rescue and the objective
