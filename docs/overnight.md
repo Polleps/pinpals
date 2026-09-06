@@ -227,6 +227,7 @@ cool things to add or improve, document them, add them here.
   least provably not silence.
 - **Every commit verified green** · DONE (b29c692). 53 of 54; the one red is the one
   already fixed.
+- **design.md audited against reality** · DONE (6656bb7). It still read as a plan.
 - **Session structure (§13.2)** · NOT ATTEMPTED, deliberately. There is a score and
   nothing that ends. It is the biggest open question left, and it is also the one where
   a wrong guess costs the most: team lives, run length and whether there is an ending
@@ -1006,5 +1007,27 @@ success. Exits non-zero if anything is red.
 
 Also refreshed the summary at the top of this file, which still quoted test counts from
 ten iterations ago — 97 core and 38 sim now, against 29 and 25 at the start of the night.
+
+### Iteration 28 — design.md says which parts of itself exist · `6656bb7`
+
+`prototype.md` got this treatment in iteration 11; `design.md` still read as a plan
+throughout, with no way to tell a decided intention from a shipped mechanic.
+
+**§9** — relay heat and home-grind lines marked BUILT with their numbers; simultaneity
+objectives marked not built. §9 also carried a warning I didn't follow: session structure
+"should be answered before scoring is tuned". I built the scoring anyway, so it assumes
+an endless session throughout — nothing resets, nothing ends. Deciding on team lives or a
+run length will likely mean revisiting the curve, because a rally worth 5.5× more is a
+very different proposition with three balls than with infinite ones. **Recorded as debt
+rather than left to be discovered.**
+
+**§5** — "Exit velocity and spin survive the trip" was **not true**. The tube carries a
+scalar speed; the receiving board launches along its *own* entry vector, and spin isn't
+transferred at all. The direction part is deliberate (an arrival keeping its original
+heading could emerge travelling into a wall), but the sentence promised more than the
+code does.
+
+**§10** — all four presentation items are built; each now says how, including the one
+that needed correcting along the way.
 
 *(iterations append here)*
