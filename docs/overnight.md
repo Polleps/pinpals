@@ -209,6 +209,7 @@ cool things to add or improve, document them, add them here.
   loop worked and was invisible; now it says what it wants.
 - **Integration soak** · DONE (9d6b4cd). Found that the rescue was firing for free.
 - **Frame cost measured** · DONE (e68d9bd). Nothing added tonight was costed until now.
+- **CLAUDE.md tooling section** · DONE (b9c295e). It was an empty header.
 - **Session structure (§13.2)** · NOT ATTEMPTED, deliberately. There is a score and
   nothing that ends. It is the biggest open question left, and it is also the one where
   a wrong guess costs the most: team lives, run length and whether there is an ending
@@ -762,5 +763,24 @@ The fix is a descent that carries the ball across (a shallower left orbit, or a
 deflector like Glasshouse's rail). That's a layout change, and every layout change
 tonight has needed a full round of re-measurement to trust, so I've left it for
 daylight rather than starting one at 02:30.
+
+### Iteration 18 — CLAUDE.md's empty Tooling section · `b9c295e`
+
+The header existed with nothing under it, so every agent starting here has had to
+rediscover the harness — and, more expensively, the four ways it will mislead them.
+
+Kept short, per the file's own instruction: what `make check` covers, that `make shot`
+exists and should be *looked at* (several bugs this week were invisible to the gates and
+obvious in the picture), an index of the twelve probes and what each answers, and the
+four lessons that each cost a wrong conclusion first:
+
+1. Pinball is chaotic — **average over seeds**. One run moved a bumper count by 60%.
+2. **Harness details dominate.** A 5px change in spawn height erased a device's entire
+   measured effect.
+3. **Check the shape, not just the number.** Rates that are all multiples of 1/7 mean
+   seven samples.
+4. **Measure the thing you're about to assert.** Both board identities and the post's
+   trade-off shipped documented backwards, because the claims were written and never
+   checked.
 
 *(iterations append here)*
