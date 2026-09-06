@@ -15,10 +15,16 @@ return function(H)
   --- The two fields fx reads off a match: board definitions, and where the
   --- ball is right now. Building this by hand rather than running physics
   --- keeps the whole suite in the fast gate.
+  --- Carries per-board cross-board state as well, because fx watches it for
+  --- the §7 panel flash and a stub without it exercises less than it looks.
   local function fake_match(phase, ball_a)
     return {
       defs  = boards,
-      state = { phase = phase or "play", stats = { relay = 0 } },
+      state = {
+        phase = phase or "play", stats = { relay = 0 },
+        boards = { a = { meters = { vault = 0 }, lit = { bumpers = 0 } },
+                   b = { meters = { vault = 0 }, lit = { bumpers = 0 } } },
+      },
       cur   = { a = { ball = ball_a }, b = { ball = nil } },
     }
   end
@@ -119,4 +125,32 @@ return function(H)
       A.equal(0, soft, "the quietest possible contact still threw sparks")
     end)
   end)
+  describe("cross-board panel flash (§7)", function()
+    it("flags the board whose state changed, and only that one", function()
+      -- "The dormant board is shown as a small panel that lights up when
+      -- cross-board state changes, so you always know what you've built up
+      -- over there." Without this the loop is two numbers moving somewhere
+      -- nobody is looking.
+      FX.reset()
+      local m = fake_match("play", { x = 200, y = 400 })
+      FX.update(m, {}, 1 / 60)                       -- establish a baseline
+      A.equal(0, FX.panel_flash("b"), "flashed before anything changed")
+      m.state.boards.b.meters.vault = 3
+      FX.update(m, {}, 1 / 60)
+      A.truthy(FX.panel_flash("b") > 0, "a charged vault did not flag its panel")
+      A.equal(0, FX.panel_flash("a"), "the flash crossed to the other board")
+    end)
+
+    it("fades, so an old change does not look like a new one", function()
+      FX.reset()
+      local m = fake_match("play", { x = 200, y = 400 })
+      FX.update(m, {}, 1 / 60)
+      m.state.boards.a.lit.bumpers = 12
+      FX.update(m, {}, 1 / 60)
+      A.truthy(FX.panel_flash("a") > 0)
+      for _ = 1, 90 do FX.update(m, {}, 1 / 60) end
+      A.equal(0, FX.panel_flash("a"), "the panel stayed lit")
+    end)
+  end)
+
 end

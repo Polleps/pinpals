@@ -6,6 +6,7 @@ local C       = require("core.constants")
 local intents = require("core.intents")
 local score   = require("core.score")
 local geo     = require("core.geometry")
+local objective = require("core.objective")
 
 local M = {}
 
@@ -313,6 +314,16 @@ local function draw_board(def, snap, prev, alpha, view, active, heat, incoming, 
   love.graphics.setScissor()
   love.graphics.pop()
 
+  -- §7: the panel flags cross-board changes, so what you built on the board
+  -- you are not looking at is never something you have to remember.
+  local flash = fx and fx.panel_flash(def.id) or 0
+  if flash > 0 then
+    love.graphics.setColor(1, 0.78, 0.35, 0.75 * flash)
+    love.graphics.setLineWidth(2 + 3 * flash)
+    love.graphics.rectangle("line", view.x - 3, view.y - 3,
+                            def.size.w * view.s + 6, def.size.h * view.s + 6, 10)
+  end
+
   -- Board nameplate
   love.graphics.setFont(fonts.small)
   love.graphics.setColor(th.wall[1], th.wall[2], th.wall[3], active and 0.95 or 0.5)
@@ -440,7 +451,27 @@ local function draw_hud(state, defs, snaps, legend)
     y = y + 22
   end
 
-  y = y + 14
+  -- What to do. The cross-board loop is the whole game and was previously
+  -- visible only as two numbers moving; this says it in words (§7).
+  y = y + 12
+  local names = {}
+  for id, d in pairs(defs) do names[id] = d.name end
+  local obj = objective.current(state, names)
+  local pulse = obj.urgent and (0.72 + 0.28 * math.abs(math.sin(state.time * 6))) or 1
+  if obj.here then
+    col(1, 0.86, 0.42, pulse)                       -- act on this board
+  else
+    col(0.55, 0.92, 1.0, pulse)                     -- it wants a pass
+  end
+  love.graphics.setFont(fonts.body)
+  love.graphics.print(obj.text, x, y)
+  if not obj.here then
+    col(1, 1, 1, 0.35)
+    love.graphics.setFont(fonts.small)
+    love.graphics.print("on " .. (names[obj.board] or obj.board), x, y + 19)
+  end
+  y = y + 40
+
   col(1, 1, 1, 0.5)
   love.graphics.setFont(fonts.small)
   love.graphics.print("OPERATOR DEVICES  (on " .. def.name .. ")", x, y)

@@ -19,6 +19,11 @@ local MAX_AWARDS = 24
 
 local rings, sparks, shake = {}, {}, { amp = 0 }
 local awards = {}                     -- floating score numbers
+-- §7: "the dormant board is shown as a small panel that lights up when
+-- cross-board state changes, so you always know what you've built up over
+-- there". Diffed here rather than signalled, because the change can come from
+-- either board's events and the panel only cares that it happened.
+local panel = { a = { flash = 0 }, b = { flash = 0 } }
 local award_font
 local trail  = { a = {}, b = {} }
 -- board -> "<kind>:<index>" -> remaining seconds. Keyed by kind as well as
@@ -167,6 +172,20 @@ local function sample_trail(match)
   end
 end
 
+local function watch_cross_board(match, dt)
+  local boards = match.state.boards or {}
+  for id, p in pairs(panel) do
+    local b = boards[id]
+    if b then
+      local sum = (b.lit.bumpers or 0) * 1000
+      for _, v in pairs(b.meters) do sum = sum + v end
+      if p.seen and sum ~= p.seen then p.flash = 1 end
+      p.seen = sum
+    end
+    p.flash = math.max(0, p.flash - dt / 0.9)
+  end
+end
+
 local function advance_pulses(dt)
   for _, board_pulses in pairs(pulses) do
     for i, t in pairs(board_pulses) do
@@ -202,6 +221,7 @@ function FX.update(match, events, dt)
   advance_list(awards, dt, function(e, d) e.y = e.y - 26 * d end)
   advance_list(sparks, dt, move_spark)
   advance_pulses(dt)
+  watch_cross_board(match, dt)
   sample_trail(match)
 
   shake.amp = shake.amp * math.exp(-9 * dt)
@@ -225,8 +245,14 @@ function FX.stats()
   }
 end
 
+--- How brightly a board's panel should be flagging a change, 0..1.
+function FX.panel_flash(board)
+  return panel[board] and panel[board].flash or 0
+end
+
 function FX.reset()
   rings, sparks, awards = {}, {}, {}
+  panel = { a = { flash = 0 }, b = { flash = 0 } }
   trail  = { a = {}, b = {} }
   pulses = { a = {}, b = {} }
   shake.amp = 0

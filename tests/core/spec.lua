@@ -637,4 +637,67 @@ return function(H)
     end)
   end)
 
+  ---------------------------------------------------------------------------
+  -- §7: the loop has to be legible, or it is two numbers moving in private.
+  ---------------------------------------------------------------------------
+  describe("objective readout", function()
+    local objective = require("core.objective")
+    local names = {}
+    for id, def in pairs(boards) do names[id] = def.name end
+
+    local function at(mut)
+      local s = state.new(boards)
+      s.phase = "play"
+      mut(s)
+      return objective.current(s, names)
+    end
+
+    it("sends a fresh ball to charge the partner board", function()
+      local o = at(function() end)
+      A.truthy(o.text:find("CHARGE"), "fresh ball got: " .. o.text)
+      A.truthy(o.here, "the first thing to do is not on the board being played")
+    end)
+
+    it("asks for a pass once the partner's vault is worth cashing", function()
+      local o = at(function(s) s.boards.b.meters.vault = 4 end)
+      A.truthy(o.text:find("PASS"), "charged vault got: " .. o.text)
+      A.truthy(not o.here, "it pointed at the board already being played")
+      A.equal("b", o.board)
+    end)
+
+    it("shouts when the vault is full", function()
+      local o = at(function(s) s.boards.b.meters.vault = C.CHARGE_MAX end)
+      A.truthy(o.urgent, "a full vault is not urgent: " .. o.text)
+    end)
+
+    it("says cash it when you are standing on it", function()
+      local o = at(function(s)
+        s.active = "b"
+        s.boards.b.meters.vault = 6
+      end)
+      A.truthy(o.text:find("CLEAR"), "standing on a charged vault got: " .. o.text)
+      A.truthy(o.here)
+    end)
+
+    it("puts lit bumpers above everything, because they expire", function()
+      -- A charged vault waits. A lit board is a timer running out, so it has
+      -- to outrank the vault even while the vault is full.
+      local o = at(function(s)
+        s.boards.b.meters.vault = C.CHARGE_MAX
+        s.boards.a.lit.bumpers  = 7
+      end)
+      A.truthy(o.text:find("LIT"), "lit bumpers lost to a full vault: " .. o.text)
+      A.equal("a", o.board)
+    end)
+
+    it("always says something", function()
+      -- A readout that can be blank is a readout players stop looking at.
+      for _, id in ipairs({ "a", "b" }) do
+        local o = at(function(s) s.active = id end)
+        A.truthy(o.text and #o.text > 0, "no objective on board " .. id)
+        A.truthy(#o.text < 34, "too long to read at a glance: " .. o.text)
+      end
+    end)
+  end)
+
 end
