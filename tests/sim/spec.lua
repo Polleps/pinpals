@@ -679,6 +679,78 @@ return function(H)
     end)
   end)
 
+  describe("determinism and replay (§5.1)", function()
+    it("reproduces a match exactly from the same intents", function()
+      -- §5.1: "whole matches can be recorded and replayed from the intent
+      -- stream plus a seed, which is worth the layer on its own for debugging
+      -- pinball physics". app/record.lua writes that stream on every session
+      -- and nothing had ever checked the promise it depends on.
+      --
+      -- §4.3 is careful about what determinism is available: identical binary
+      -- and identical operation ordering, on one machine. That is exactly the
+      -- case here, and exactly what a replay needs.
+      local ACTIONS = { "flip_left", "flip_right", "operator_gate", "operator_paddle" }
+      local function record_run()
+        math.randomseed(9001)
+        local stream = {}
+        for i = 1, 30 * C.TICK_HZ do
+          if i % 19 == 0 then
+            stream[#stream+1] = {
+              tick = i, player = math.random(2),
+              action = ACTIONS[math.random(#ACTIONS)],
+              pressed = math.random() < 0.5,
+            }
+          end
+        end
+        return stream
+      end
+
+      --- Returns a checksum of the WHOLE run, not just where it ended.
+      --- Comparing only the final state is far too weak: injecting a random
+      --- 0.005 px/s nudge into the sim left the end state identical (the ball
+      --- happened to be gone, and the counters agreed) while breaking the
+      --- tunneling test three tests earlier. A trajectory that diverges and
+      --- reconverges is still a replay that does not replay.
+      local function play(stream)
+        local m = Match.new(boards)
+        local next_i, sum = 1, 0
+        for i = 1, 30 * C.TICK_HZ do
+          while stream[next_i] and stream[next_i].tick == i do
+            m:push(stream[next_i]); next_i = next_i + 1
+          end
+          m:run(1)
+          if i % 7 == 0 then
+            local x, y = m.boards[m.state.active]:ball_pos()
+            sum = (sum * 31
+                   + math.floor((x or 0) * 64)
+                   + math.floor((y or 0) * 64) * 7
+                   + m.state.stats.score) % 2147483647
+          end
+        end
+        local st = m.state.stats
+        return {
+          checksum = sum,
+          tick = m.state.tick, phase = m.state.phase, active = m.state.active,
+          score = st.score, passes = st.passes, drains = st.drains,
+          relay = st.relay, rescues = st.rescues,
+          vault = m.state.boards.b.meters.vault,
+        }
+      end
+
+      local stream = record_run()
+      local a, b = play(stream), play(stream)
+      for k, v in pairs(a) do
+        A.equal(v, b[k],
+          ("replay diverged on %s after 30s: the intent stream is not enough")
+            :format(k))
+      end
+      -- And the run has to be doing something, or this passes vacuously.
+      A.truthy(a.tick > 0 and (a.score > 0 or a.passes > 0 or a.drains > 0),
+               "the determinism test replayed an empty match")
+      A.truthy(a.checksum ~= 0, "the trajectory checksum never accumulated")
+    end)
+  end)
+
   describe("performance headroom (§3)", function()
     it("leaves the fixed timestep an order of magnitude of room", function()
       -- technical-choices.md §3 asserts "performance is not the

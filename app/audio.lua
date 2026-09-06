@@ -38,6 +38,24 @@ local function attack_at(t, attack)
   return t / attack
 end
 
+--- A local pseudo-random source for the noise components.
+---
+--- The kit has to sound the same every run or a voice is not a constant, and
+--- the obvious way to get that -- math.randomseed(4242) before synthesis --
+--- reseeds the GLOBAL generator from a presentation module. Everything that
+--- later calls math.random inherits it, silently: app/fx.lua's spark angles
+--- and screen shake do exactly that today, and a future caller would too.
+---
+--- So: a tiny local LCG instead. Same numbers every run, no global state
+--- touched, and nothing else in the program has to know this module exists.
+local function noise_source(seed)
+  local state = seed
+  return function()
+    state = (1103515245 * state + 12345) % 2147483648
+    return state / 2147483648
+  end
+end
+
 local function osc(wave, phase)
   if wave == "sine" then
     return math.sin(phase * 2 * math.pi)
@@ -66,6 +84,7 @@ local function render(v)
   local n    = math.max(2, math.floor(RATE * v.dur))
   local data = love.sound.newSoundData(n, RATE, 16, 1)
   local lp    = { y = 0 }
+  local rand  = noise_source(4242)
   local phase = 0
   for i = 0, n - 1 do
     local t  = i / RATE
@@ -77,7 +96,7 @@ local function render(v)
     local grain = 0
     if (v.noise or 0) > 0 then
       local cut = (v.cut0 or 4000) + ((v.cut1 or v.cut0 or 4000) - (v.cut0 or 4000)) * u
-      grain = lowpass(lp, math.random() * 2 - 1, cut) * v.noise
+      grain = lowpass(lp, rand() * 2 - 1, cut) * v.noise
     end
 
     local amp = decay_at(t, v.dur, v.curve or 3) * attack_at(t, v.attack or 0.002)
@@ -176,7 +195,6 @@ end
 --- Safe to call when the audio modules are disabled; everything then no-ops.
 function A.load()
   if not (love.audio and love.sound) then return false end
-  math.randomseed(4242)      -- same noise every run, so the kit is a constant
   for name, spec in pairs(KIT) do build_pool(name, spec) end
   available = true
   return true
