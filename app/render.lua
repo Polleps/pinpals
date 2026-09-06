@@ -10,6 +10,10 @@ local objective = require("core.objective")
 
 local M = {}
 
+-- Window size, read from the window rather than assumed. Every number below
+-- is derived from it, so a board that grows or a display that is bigger than
+-- 1000x780 both work without a second set of hardcoded coordinates to keep in
+-- sync -- which is what the 384x768 boards were quietly relying on.
 local W, H = 1000, 780
 
 -- Each board keeps its own side of the screen for the whole match: A is
@@ -17,12 +21,31 @@ local W, H = 1000, 780
 -- nothing ever slides across the screen or trades places with the other board
 -- -- you always know where your board is, and the handover has no jump in it.
 local TOP_Y      = 30
-local LEFT_X     = 24
-local RIGHT_EDGE = 976
+local MARGIN     = 24
+local FOOTER     = 46     -- room under the boards for the key hints and debug
+local LEFT_X     = MARGIN
+local RIGHT_EDGE = W - MARGIN
 
-local S_ACTIVE  = 0.93
-local S_DORMANT = 0.40
-local S_TRANSIT = 0.70    -- both boards visible for the pass (§10)
+-- Filled in by layout(): the active board is scaled to fill the height it is
+-- given, and the other two scales are fixed fractions of it so the pull-back
+-- and the side panel keep their proportions whatever the board's size.
+local S_ACTIVE, S_DORMANT, S_TRANSIT = 0.93, 0.40, 0.70
+
+--- Recompute the layout for the current window and the current boards.
+--- Called from load(); everything else reads the results.
+local function layout(defs)
+  if love.graphics and love.graphics.getDimensions then
+    W, H = love.graphics.getDimensions()
+  end
+  LEFT_X, RIGHT_EDGE = MARGIN, W - MARGIN
+  local tallest = 1
+  for _, def in pairs(defs) do tallest = math.max(tallest, def.size.h) end
+  -- 0.95 rather than 1.0 so a board that happens to be short does not fill
+  -- the window edge to edge and leave the nameplate hanging off the top.
+  S_ACTIVE  = math.min(0.95, (H - TOP_Y - FOOTER) / tallest)
+  S_DORMANT = S_ACTIVE * 0.43
+  S_TRANSIT = S_ACTIVE * 0.75    -- both boards visible for the pass (§10)
+end
 
 --- Screen position of a board at a given scale. This is the whole layout.
 local function place(id, s, w)
@@ -51,6 +74,7 @@ function M.attach_fx(module)
 end
 
 function M.load(defs)
+  layout(defs)
   fonts = {
     small = love.graphics.newFont(11),
     body  = love.graphics.newFont(14),
@@ -60,7 +84,8 @@ function M.load(defs)
   M.view = { a = { s = S_ACTIVE }, b = { s = S_DORMANT } }
   M.hud_a = 1
   for id, v in pairs(M.view) do v.x, v.y = place(id, v.s, defs[id].size.w) end
-  M.hud_x = LEFT_X + defs.a.size.w * M.view.a.s + 24
+  M.hud_x = LEFT_X + defs.a.size.w * M.view.a.s + MARGIN
+  M.size.w, M.size.h = W, H
   if fx then fx.set_font(fonts.body) end
 end
 
@@ -117,7 +142,7 @@ function M.update_camera(state, defs, dt)
   end
   -- The HUD lives in the gap between the two boards, wherever that currently
   -- is: derived from the live scale, so it is always in the right place.
-  M.hud_x = LEFT_X + defs.a.size.w * M.view.a.s + 24
+  M.hud_x = LEFT_X + defs.a.size.w * M.view.a.s + MARGIN
 end
 
 ---------------------------------------------------------------------------
@@ -240,6 +265,23 @@ local function draw_cross_board(ctx)
         end
       end
     end
+  end
+end
+
+--- The two slingshots above the flippers. Drawn filled, because they are the
+--- one piece of furniture the player has to read as SOLID at a glance -- a
+--- shot that clips one is going somewhere the player did not aim.
+local function draw_slingshots(ctx)
+  for i, sl in ipairs(ctx.def.slingshots or {}) do
+    local pulse = fx and fx.hit_pulse(ctx.def.id, "sling", i) or 0
+    love.graphics.setColor(0.85 * ctx.dim, 0.42 * ctx.dim, 0.62 * ctx.dim,
+                           0.30 + 0.55 * pulse)
+    love.graphics.polygon("fill", sl.p)
+    love.graphics.setColor(1.0 * ctx.dim, 0.55 * ctx.dim, 0.80 * ctx.dim,
+                           0.65 + 0.35 * pulse)
+    love.graphics.setLineWidth(2 + 3 * pulse)
+    love.graphics.polygon("line", sl.p)
+    love.graphics.setLineWidth(3)
   end
 end
 
@@ -378,6 +420,7 @@ local function draw_board(def, snap, prev, alpha, view, active, heat, incoming, 
   draw_drain_line(ctx)
   draw_walls(ctx, th)
   draw_bumpers(ctx)
+  draw_slingshots(ctx)
   draw_cross_board(ctx)
   draw_targets(ctx)
   draw_link(ctx)
@@ -617,14 +660,18 @@ end
 --- the §8 rescue window, which is the most urgent thing the game ever
 --- puts on screen.
 local function hud_banner(state, defs, legend, active)
-  -- Phase banner
+  -- Phase banner. Every offset below is a fraction of the board as drawn, not
+  -- a pixel count: the board's own size and the window's are both variable now
+  -- (see layout()), and a banner pinned at y+300 lands in a different part of
+  -- a 960px board than of a 768px one.
   local vx, vy = M.view[active].x, M.view[active].y
   local vw = defs[active].size.w * M.view[active].s
+  local bh = defs[active].size.h * M.view[active].s
   if state.phase == "serve" or state.phase == "drain" then
     love.graphics.setFont(fonts.head)
     col(1, 1, 1, 0.75)
     love.graphics.printf(state.phase == "drain" and "DRAINED" or "SERVING",
-                         vx, vy + 300, vw, "center")
+                         vx, vy + bh * 0.42, vw, "center")
 
   elseif state.phase == "purgatory" then
     -- §8. The single most urgent thing on screen, and it is addressed to the
@@ -637,15 +684,15 @@ local function hud_banner(state, defs, legend, active)
     local flash = 0.55 + 0.45 * math.abs(math.sin(state.time * 14))
 
     love.graphics.setColor(1, 0.30, 0.34, 0.16 * flash)
-    love.graphics.rectangle("fill", vx, vy, vw, defs[active].size.h * M.view[active].s, 8)
+    love.graphics.rectangle("fill", vx, vy, vw, bh, 8)
 
     love.graphics.setFont(fonts.huge)
     love.graphics.setColor(1, 0.42, 0.46, flash)
-    love.graphics.printf("SAVE IT", vx, vy + 286, vw, "center")
+    love.graphics.printf("SAVE IT", vx, vy + bh * 0.40, vw, "center")
     love.graphics.setFont(fonts.body)
     love.graphics.setColor(1, 1, 1, 0.92)
     love.graphics.printf(("P%d  press  %s"):format(partner, key:upper()),
-                         vx, vy + 330, vw, "center")
+                         vx, vy + bh * 0.462, vw, "center")
 
     -- What it will cost, so the decision is informed rather than reflexive.
     local charge = 0
@@ -656,21 +703,21 @@ local function hud_banner(state, defs, legend, active)
       love.graphics.setFont(fonts.small)
       love.graphics.setColor(1, 0.75, 0.45, 0.85)
       love.graphics.printf(("costs the vault charge  (x%d)"):format(charge),
-                           vx, vy + 352, vw, "center")
+                           vx, vy + bh * 0.493, vw, "center")
     end
 
     local bw = vw * 0.6
     love.graphics.setColor(1, 1, 1, 0.15)
-    love.graphics.rectangle("fill", vx + (vw - bw) / 2, vy + 376, bw, 8, 4)
+    love.graphics.rectangle("fill", vx + (vw - bw) / 2, vy + bh * 0.527, bw, 8, 4)
     love.graphics.setColor(1, 0.42, 0.46, 0.95)
-    love.graphics.rectangle("fill", vx + (vw - bw) / 2, vy + 376, bw * u, 8, 4)
+    love.graphics.rectangle("fill", vx + (vw - bw) / 2, vy + bh * 0.527, bw * u, 8, 4)
   end
 end
 
 --- The panel between the two boards. Split out of a 174-line function; each
 --- helper draws one block and returns the y cursor for the next.
 local function draw_hud(state, defs, snaps, legend)
-  local x, y   = M.hud_x, 380
+  local x, y   = M.hud_x, math.floor(H * 0.49)
   local active = state.active
   local def    = defs[active]
   local transit = state.phase == "transit"

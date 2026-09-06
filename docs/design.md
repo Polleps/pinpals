@@ -146,33 +146,39 @@ The two boards are **different, and interconnected by state**. Not mirrors.
 | | Foundry | Glasshouse |
 |---|---|---|
 | Character | chaotic, forgiving, cheap | clean, precise, expensive |
-| Content | a bumper cluster in the orbit lane | a two-target bank |
+| Content | a bumper nest across the top | a two-target bank in the left field |
 | Drain gap | 27.6px | 43.6px |
-| Mean ball life | 12.19s | 9.05s |
-| Drains per second | 0.0725 | 0.0810 |
-| Pass rate from a swept flip | 54% | 66% |
-| **Points per second** | **24** | **351** |
+| Mean ball life | 9.46s | 5.76s |
+| Drains per second | 0.0793 | 0.1533 |
+| Pass rate from a swept flip | 50% | 50% |
+| Pass rate from a *received* ball | 32% | 62% |
+| **Points per second** | **18** | **192** |
 
 That puts §6.2's trade — "the safe thing for me or the good thing for you" — one level
 up, onto the pass itself: do I keep the rally alive, or send it somewhere it can
 actually score? And because §9 makes a hot rally worth more, the temptation to cash in
-on Glasshouse grows at exactly the rate the cost of losing it does. The risk curve and
-the geometry pull in the same direction, which is the whole reason to have two boards
-rather than one board twice.
+on Glasshouse grows at exactly the rate the cost of losing it does.
 
-Glasshouse pays roughly 15x per second of ball time and kills the ball a third faster.
-Neither number was chosen; both fell out of giving each board content its own shape can
-actually deliver to the ball.
+Glasshouse pays roughly 11× per second of ball time and kills the ball nearly twice as
+fast. Neither number was chosen; both fell out of giving each board content its own
+shape can actually deliver to the ball.
 
-This replaces the earlier claim ("Foundry forgiving, Glasshouse punishing to sit on"),
-which had never been measured and was backwards: Glasshouse had the *higher* survival
-rate of the two, 27% against Foundry's 15%, and Foundry drained more often per second
-of ball time despite a narrower gap. Foundry was worse on every axis at once — not an
-identity, a bug. Fixed by narrowing its flipper gap; the numbers above are after.
+> **Re-measured 2026-09-06 on the boards-v2 layout** (448×960, outlanes, slingshots,
+> short ramps — see `docs/boards-v2.md`). Both boards are considerably deadlier than
+> before: ball life fell 12.19s → 9.46s on Foundry and 9.86s → 5.76s on Glasshouse.
+> That is the outlanes, which are a second and third way to lose the ball that no
+> operator device can guard. The *gap* between the boards widened, though, which is
+> the point: Glasshouse used to drain only 7% faster than Foundry despite a 16px wider
+> flipper gap, so the identity was a claim more than a fact. It now drains 93% faster.
+>
+> Whether Glasshouse is now *too* deadly at 5.76s a ball is open, and the knob is
+> outlane width. `docs/boards-v2.md` §8 flags it as the first thing to tune.
 
-**Still open underneath this:** the two boards differ in what they are *for*, but not
-yet in how they are *played*. Nothing on Foundry rewards a skill that Glasshouse
-punishes.
+**Was open underneath this, and is now partly answered:** the two boards differ in what
+they are *for*, and as of boards-v2 also in how they are *played* — Foundry's pass is
+the left flipper's shot and Glasshouse's is the right flipper's, and the reach maps put
+Foundry's traffic up the left orbit against Glasshouse's down the middle-left. What is
+still missing is a *skill* one board rewards and the other punishes.
 
 ### 7.1 The cross-board loop, as built **PROVISIONAL (2026-09-06)**
 

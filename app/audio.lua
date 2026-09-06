@@ -227,7 +227,7 @@ end
 
 local IMPACT_VOICE = {
   wall = "wall", bumper = "bumper", flipper = "flipper",
-  gate = "gate", post = "post",
+  gate = "gate", post = "post", sling = "bumper",
 }
 
 --- Drain one frame's worth of events from sim/ into the speakers.

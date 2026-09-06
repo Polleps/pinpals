@@ -87,23 +87,38 @@ return function(H)
   end)
 
   describe("the gate (§6.2: opens the pass, closes the safe return)", function()
+    -- Just inside the ramp mouth, derived from the tube rather than written
+    -- out: the channel is centred on the mouth on both boards, so this spawn
+    -- follows the ramp when the board data moves it. It used to be the literal
+    -- (215, 520), which silently stopped being inside the channel the moment
+    -- the board grew.
+    local RAMP_DROP = 352
+    local function in_ramp(def)
+      return def.tube.mouth.x, def.tube.mouth.y + RAMP_DROP
+    end
+
     it("closed, a shot up the ramp comes back down instead of passing", function()
-      local b = Board.new(boards.a)
+      local def = boards.a
+      local b = Board.new(def)
       local ev = {}
-      b:spawn(215, 520, 0, -C.SERVE_SPEED)     -- inside the ramp channel
+      local rx, ry = in_ramp(def)
+      b:spawn(rx, ry, 0, -C.SERVE_SPEED)
       run(b, 2.0, cmd(false, false), ev)
       for _, e in ipairs(ev) do A.truthy(e.kind ~= "tube", "the ball passed through a closed gate") end
       local _, y = b:ball_pos()
-      A.truthy(y > 300, "the ball should have been returned down the lane, y=" .. tostring(y))
+      A.truthy(y > def.tube.mouth.y + 130,
+               "the ball should have been returned down the lane, y=" .. tostring(y))
     end)
 
     it("open, the same shot reaches the tube", function()
-      local b = Board.new(boards.a)
+      local def = boards.a
+      local b = Board.new(def)
       local c = cmd(true, false)
       run(b, 0.40, c)                       -- let the gate finish travelling
       A.between(0.98, 1.02, b:device_progress("gate"))
       local ev = {}
-      b:spawn(215, 520, 0, -C.SERVE_SPEED)
+      local rx, ry = in_ramp(def)
+      b:spawn(rx, ry, 0, -C.SERVE_SPEED)
       run(b, 1.5, c, ev)
       local passed = false
       for _, e in ipairs(ev) do if e.kind == "tube" then passed = true end end
@@ -126,21 +141,31 @@ return function(H)
   end)
 
   describe("the post (§6.2: guards the drain, blocks the shots)", function()
+    -- Straight down the middle, from BELOW the ramp mouth. Board centre is
+    -- also the centre of the ramp channel, so a drop from half-way up starts
+    -- inside the ramp and tests the ramp rather than the drain -- which is
+    -- exactly what it silently did once the channel moved.
+    local function down_the_middle(def)
+      return def.size.w / 2, def.size.h * 0.64
+    end
+
     it("raised, it catches a ball headed straight down the middle", function()
-      local b = Board.new(boards.a)
+      local def = boards.a
+      local b = Board.new(def)
       local c = cmd(false, true)
       run(b, 0.35, c)
       A.between(0.98, 1.02, b:device_progress("post"))
       local ev = {}
-      b:spawn(192, 380, 0, 0)
+      b:spawn(down_the_middle(def))
       run(b, 2.5, c, ev)
       for _, e in ipairs(ev) do A.truthy(e.kind ~= "drain", "the post let the ball through") end
     end)
 
     it("retracted, the same ball drains", function()
-      local b = Board.new(boards.a)
+      local def = boards.a
+      local b = Board.new(def)
       local ev = {}
-      b:spawn(192, 380, 0, 0)
+      b:spawn(down_the_middle(def))
       run(b, 2.5, cmd(false, false), ev)
       local drained = false
       for _, e in ipairs(ev) do if e.kind == "drain" then drained = true end end
@@ -148,10 +173,11 @@ return function(H)
     end)
 
     it("settles the ball instead of jittering it forever", function()
-      local b = Board.new(boards.a)
+      local def = boards.a
+      local b = Board.new(def)
       local c = cmd(false, true)
       run(b, 0.35, c)
-      b:spawn(192, 380, 0, 0)
+      b:spawn(down_the_middle(def))
       run(b, 3.0, c)
       A.truthy(b:ball_speed() < 2.0 * C.METER,
                "resting contact is jittering at " .. tostring(b:ball_speed()))
@@ -160,19 +186,24 @@ return function(H)
 
   describe("flippers", function()
     it("throw a resting ball hard enough to reach the top of the board", function()
-      local b = Board.new(boards.a)
+      local def = boards.a
+      local b = Board.new(def)
+      local f = def.flippers[1]
       -- Placed on the flipper face, not dropped: a resting flipper is a 30
       -- degree slope, so a dropped ball rolls off the tip before you can hit it.
-      b:spawn(155, 686, 0, 0)
+      b:spawn(f.x + 19, f.y - 2, 0, 0)
       local peak = 0
       local c = cmd(false, false, true, false)
       for _ = 1, math.floor(0.35 * C.TICK_HZ) do
         b:step(c, true)
         peak = math.max(peak, b:ball_speed())
       end
-      -- Reaching y=100 from y=660 needs sqrt(2*g*560) = 888 px/s of upward
-      -- velocity. A flipper that cannot do that cannot make the pass shot.
-      A.truthy(peak > 888, "flipper launch too weak: " .. ("%.0f px/s"):format(peak))
+      -- The bar is the board's own pass shot, not a fixed number: reaching the
+      -- tube mouth from the flipper line needs sqrt(2*g*h) of upward velocity,
+      -- and a flipper that cannot manage it cannot make the pass.
+      local need = math.sqrt(2 * C.GRAVITY_PX * (f.y - def.tube.mouth.y))
+      A.truthy(peak > need,
+        ("flipper launch too weak: %.0f px/s, needs %.0f"):format(peak, need))
     end)
   end)
 
@@ -183,11 +214,11 @@ return function(H)
     -- x=328. It was hit 1 time in 30. This test exists so that cannot come
     -- back silently after a board-data edit.
     local on_flipper
-    function on_flipper(fx, side, k)
+    function on_flipper(fx, fy, side, k)
       local sgn = (side == "left") and 1 or -1
       local a = C.FLIPPER_REST
       return fx + sgn * C.FLIPPER_LEN * k * math.cos(a),
-             688 + C.FLIPPER_LEN * k * math.sin(a)
+             fy + C.FLIPPER_LEN * k * math.sin(a)
                  - (C.BALL_RADIUS + C.FLIPPER_THICK / 2) / math.cos(a)
     end
 
@@ -199,7 +230,7 @@ return function(H)
           for k = 0.25, 0.90, 0.09 do
             local b = Board.new(def)
             run(b, 0.40, cmd(true, false))                  -- gate already open
-            b:spawn(on_flipper(def.flippers[fi].x, side, k))
+            b:spawn(on_flipper(def.flippers[fi].x, def.flippers[fi].y, side, k))
             run(b, 12 * C.FIXED_DT, cmd(true, false))       -- settle into contact
             local c = cmd(true, false, side == "left", side == "right")
             local got = false
@@ -257,7 +288,11 @@ return function(H)
             local bx, by = b:ball_pos()
             if not bx then break end
             -- Above the ramp neck and outside its channel: an orbit lane.
-            if by < 520 and (bx < 180 or bx > 250) then out = true break end
+            -- Both bounds hang off the tube mouth, which is what the channel
+            -- is centred on, so they follow the ramp instead of describing
+            -- where it used to be.
+            local m = def.tube.mouth
+            if by < m.y + 352 and (bx < m.x - 35 or bx > m.x + 35) then out = true break end
           end
           tried = tried + 1
           if out then escaped = escaped + 1 end
@@ -314,9 +349,12 @@ return function(H)
       -- have to be caught and sent back. A board where that is impossible has
       -- no rally regardless of how good its static pass rate looks.
       --
-      -- Measured in tests/probe_timing.lua, with a player who predicts
-      -- contact rather than flipping on a fixed delay: 63% on Foundry and 85%
-      -- on Glasshouse at best timing. This floor is well under both.
+      -- Re-measured on the boards-v2 layout with a player who predicts contact
+      -- and can flip more than once: 32% on Foundry and 62% on Glasshouse at
+      -- best timing, against 63% and 85% on the old corridor boards. Both
+      -- boards got harder to receive on, and that is the price of the upper
+      -- playfield becoming reachable at all -- a board where every shot ends
+      -- at the ramp is easy to pass from because there is nowhere else to go.
       local function received_pass_rate(def, lead)
         local made, tried = 0, 0
         for i = 1, 16 do
@@ -330,19 +368,31 @@ return function(H)
           b:spawn(e.x + (math.random() * 2 - 1) * 6, e.y,
                   math.cos(ang) * speed, math.sin(ang) * speed)
           local fired, held, side = false, 0, nil
+          local SWING = math.floor(0.22 * C.TICK_HZ)
           local mid, got = def.size.w / 2, false
           for _ = 1, math.floor(6 * C.TICK_HZ) do
             local bx, by = b:ball_pos()
             if not bx then break end
             local _, vy = b:ball_velocity()
-            if not fired and vy > 0 and by < 688 and (688 - by) / vy <= lead then
+            local fy = def.flippers[1].y
+            if not fired and vy > 0 and by < fy and (fy - by) / vy <= lead then
               fired, held = true, 0
               side = (bx < mid) and "left" or "right"
             end
             local flipping = false
             if fired then
               held = held + 1
-              flipping = held < math.floor(0.22 * C.TICK_HZ)
+              flipping = held < SWING
+              -- Rearm, so the model is a player rather than a single reflex.
+              -- One flip per ball was enough to measure the old boards because
+              -- every shot on them ended at the ramp or the drain; on a board
+              -- with an actual playfield a ball that is flipped and not passed
+              -- comes back down, and a human flips it again. Measured, the
+              -- difference is entirely in CENTRE drains -- 60 of them across
+              -- 200 attempts with one flip, 3 with re-arming -- while outlane
+              -- losses are unchanged. That is the shape of real pinball: the
+              -- flipper defends the middle, and the sides are what kill you.
+              if held >= SWING * 2 then fired = false end
             end
             local over = false
             for _, ev in ipairs(b:step(cmd(true, false,
@@ -576,7 +626,8 @@ return function(H)
       A.equal("play", s.phase)
       -- Stand in for a made ramp shot: the aiming is covered elsewhere, this
       -- test is about the handoff.
-      m.boards.a:spawn(215, 520, 0, -C.SERVE_SPEED)
+      local mouth = boards.a.tube.mouth
+      m.boards.a:spawn(mouth.x, mouth.y + 352, 0, -C.SERVE_SPEED)
       local saw_transit, landed = false, false
       for _ = 1, C.TICK_HZ * 8 do
         m:run(1)

@@ -40,6 +40,24 @@ local function build_bumpers(self, def)
   end
 end
 
+--- Slingshots. Static like a wall, energetic like a bumper: the whole triangle
+--- carries the restitution, because the ball only ever meets the face that
+--- points into the playfield -- the other two sides are buried against the
+--- inlane and the lane divider.
+---
+--- design.md §6.1 forbids impulses, and this is not one: the rule is about
+--- what the OPERATOR can do, and a slingshot is table furniture nobody fires.
+--- It is built exactly the way bumpers already are, so it inherits their
+--- measured no-debounce-needed behaviour rather than inventing new machinery.
+local function build_slingshots(self, def)
+  for i, sl in ipairs(def.slingshots or {}) do
+    local f = love.physics.newFixture(self.ground, love.physics.newPolygonShape(sl.p), 0)
+    f:setRestitution(sl.kick or 1.35)
+    f:setFriction(0.04)
+    ud(f, "sling", i)
+  end
+end
+
 --- Standup targets. Static like walls, but they report being hit, which is
 --- what makes them content rather than scenery. Corners come from core/ so
 --- the fixture, the geometry checks and the drawing cannot disagree.
@@ -135,6 +153,7 @@ function Board.new(def)
 
   build_walls(self, def)
   build_bumpers(self, def)
+  build_slingshots(self, def)
   build_targets(self, def)
   build_mouth(self, def)
   build_devices(self, def)
@@ -233,6 +252,14 @@ function Board:_begin(fa, fb, _)
     local hit = self.def.bumpers[other.id]
     self.events[#self.events+1] = {
       kind = "bumper", board = self.id, index = other.id, x = hit.x, y = hit.y,
+    }
+
+  elseif other.kind == "sling" then
+    local sl = self.def.slingshots[other.id]
+    local c = sl.p
+    self.events[#self.events+1] = {
+      kind = "sling", board = self.id, index = other.id,
+      x = (c[1] + c[3] + c[5]) / 3, y = (c[2] + c[4] + c[6]) / 3,
     }
 
   elseif other.kind == "target" then

@@ -12,9 +12,12 @@ C.METER          = 64          -- pixels per Box2D meter
 C.GRAVITY_MS2    = 11.0        -- ~1.11 m/s^2 down-playfield at 6.5deg, x10
 C.GRAVITY_PX     = C.GRAVITY_MS2 * C.METER
 
--- Board dimensions in world pixels. 6m x 12m at 64 px/m.
-C.BOARD_W        = 384
-C.BOARD_H        = 768
+-- Board dimensions in world pixels. 7m x 15m at 64 px/m. Grown from 6m x 12m
+-- in boards-v2 (docs/boards-v2.md): the ball did not change size, so the whole
+-- table got roomier rather than merely zoomed. Each board carries its own
+-- `size`, which is what sim/ and app/ read; these are the reference values.
+C.BOARD_W        = 448
+C.BOARD_H        = 960
 
 -- Ball: 27mm x10 = 0.27m diameter.
 C.BALL_RADIUS    = 0.135 * C.METER   -- 8.64 px
@@ -64,6 +67,10 @@ C.TRANSIT_MAX_SP = C.BALL_MAX_SPEED
 C.HEAT_MAX       = 10          -- x10 ceiling, so a long rally still has a top
 C.SCORE_PASS     = 1000        -- awarded per crossing, at the new heat
 C.SCORE_BUMPER   = 50          -- chaos: cheap, frequent, not aimed
+-- A slingshot fires because the ball happened to roll past it, so it pays
+-- less than a bumper you at least aimed the ball into. It is worth points at
+-- all because a table where the furniture is silent reads as scenery.
+C.SCORE_SLING    = 25
 C.SCORE_TARGET   = 250         -- precision: you meant to hit this
 C.SCORE_BANK     = 2500        -- clearing a whole bank, before the multiplier
 

@@ -38,16 +38,19 @@ return function(H)
     it("the V in board A's lower-right wall", function()
       -- The chain turned back up at the end to meet the pivot, putting a bowl
       -- at (300,702) that swallowed the ball. Reported by playtest, not tests.
+      -- Coordinates carried onto the 448x960 board with the same (+32, +192)
+      -- the boards themselves moved by, so the fixture still describes the
+      -- shipped chain rather than a wall floating in the middle of the field.
       local b = broken(function(x)
-        x.walls[3] = { 374,656, 352,686, 300,702, 251,692 }
+        x.walls[3] = { 438,848, 384,878, 332,894, 283,884 }
       end)
       local found = kinds(b)
-      A.truthy(found.bowl, "the bowl at (300,702) was not reported")
+      A.truthy(found.bowl, "the bowl at (332,894) was not reported")
     end)
 
     it("a wall ending underneath its own flipper pivot", function()
       local b = broken(function(x)
-        x.walls[2] = { 10,610, 70,664, 124,690, 133,692 }
+        x.walls[2] = { 10,802, 102,856, 156,882, 165,884 }
       end)
       A.truthy(kinds(b)["flipper-jam"], "the wall inside the left flipper was not reported")
     end)
@@ -115,7 +118,9 @@ return function(H)
       -- Same failure as a bumper against a wall, and easier to author by
       -- accident because a target is small and its angle is easy to get wrong.
       local b = broken_b(function(x)
-        x.targets = { { x = 366, y = 400, w = 28, h = 9, angle = 0, bank = "vault" } }
+        -- Parked against Glasshouse's right wall, which is at x=438 since the
+        -- board grew to 448x960: the target's own edge lands 10px off it.
+        x.targets = { { x = 414, y = 592, w = 28, h = 9, angle = 0, bank = "vault" } }
       end)
       A.truthy(kinds(b).wedge, "a target one ball-width from the wall was not reported")
     end)

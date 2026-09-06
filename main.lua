@@ -18,9 +18,30 @@ local match, render, input, audio, fx, record, boards
 local debug_on = false
 local shot_done = false
 
+--- The window in conf.lua is a floor, not a choice: 1000x780 was sized around
+--- a 768px board, and a taller board simply gets drawn smaller inside it. Take
+--- whatever the display can spare instead, so the playfield grows with the
+--- screen. app/render.lua reads the result rather than assuming it.
+---
+--- Done here and not in love.conf because love.window does not exist yet at
+--- conf time, so the desktop size cannot be asked for there.
+local function fit_window()
+  if not (love.window and love.window.getDesktopDimensions) then return end
+  local dw, dh = love.window.getDesktopDimensions()
+  if not dw or dw == 0 then return end
+  local w = math.min(1360, math.max(1000, math.floor(dw * 0.86)))
+  local h = math.min(1040, math.max(780,  math.floor(dh * 0.86)))
+  local cw, ch = love.window.getMode()
+  if w == cw and h == ch then return end
+  -- setMode replaces the whole flag set, so every flag conf.lua chose has to
+  -- be restated or vsync and MSAA quietly turn themselves off.
+  love.window.setMode(w, h, { resizable = false, vsync = 1, msaa = 4 })
+end
+
 function love.load()
   love.physics.setMeter(C.METER)      -- §4.2: set once, before any world
   boards = require("data.tables.init").load()
+  if mode ~= "test" then fit_window() end
 
   if mode == "test" then
     local ok = require(os.getenv("PINPALS_SUITE") or "tests.run_sim")()

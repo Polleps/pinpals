@@ -300,6 +300,16 @@ function M.consume(s, events)
         }
       end
 
+    elseif ev.kind == "sling" and s.phase == "play" then
+      -- Cheap, unaimed, and constant: the slingshots are what keep a ball that
+      -- came down the side in play at all. They deliberately do NOT feed the
+      -- §7 cross-board links -- a charge you get for free is a charge that
+      -- stops being something you went and did.
+      s.last_award = {
+        kind = "sling", value = score.award(s.stats, "sling"),
+        board = ev.board, x = ev.x, y = ev.y,
+      }
+
     elseif ev.kind == "bumper" and s.phase == "play" then
       local board = s.boards[ev.board]
       -- A lit bumper is the payoff coming home: Glasshouse cleared its vault,

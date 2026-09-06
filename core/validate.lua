@@ -46,6 +46,34 @@ function M.board(b)
     end
   end
 
+  -- Slingshots: three points, and a kick that actually kicks. A slingshot
+  -- with restitution <= 1 is a wall shaped like a slingshot, which is the
+  -- kind of thing that reads fine on screen and silently does nothing.
+  for i, sl in ipairs(b.slingshots or {}) do
+    local at = ("slingshots[%d]"):format(i)
+    if type(sl.p) ~= "table" or #sl.p ~= 6 then
+      e[#e+1] = at .. ".p: expected six numbers, three points of a triangle"
+    else
+      for k = 1, 6 do
+        if not isnum(sl.p[k]) then e[#e+1] = at .. ".p: contains a non-number" break end
+      end
+      -- Collinear points make a zero-area polygon, which Box2D rejects at
+      -- fixture construction with a message nobody can trace back to here.
+      local ax, ay, bx, by, cx, cy = sl.p[1], sl.p[2], sl.p[3], sl.p[4], sl.p[5], sl.p[6]
+      if isnum(ax) and isnum(cy) then
+        local area = math.abs((bx-ax)*(cy-ay) - (by-ay)*(cx-ax)) / 2
+        if area < 100 then
+          e[#e+1] = at .. (": the three points are nearly collinear (area %.0f)"):format(area)
+        end
+      end
+    end
+    if sl.kick ~= nil and not isnum(sl.kick) then
+      e[#e+1] = at .. ".kick: expected a number"
+    elseif (sl.kick or 1.35) <= 1.0 then
+      e[#e+1] = at .. ".kick: must exceed 1.0 or it is a wall, not a slingshot"
+    end
+  end
+
   for i, t in ipairs(b.targets or {}) do
     if not (isnum(t.x) and isnum(t.y) and isnum(t.w) and isnum(t.h)) then
       e[#e+1] = ("targets[%d]: expected x, y, w, h"):format(i)
@@ -175,6 +203,11 @@ function M.board(b)
     end
     for _, f in ipairs(b.flippers or {}) do inside("flipper", f.x, f.y) end
     for _, bump in ipairs(b.bumpers or {}) do inside("bumper", bump.x, bump.y) end
+    for i, sl in ipairs(b.slingshots or {}) do
+      if type(sl.p) == "table" and #sl.p == 6 then
+        for k = 1, 5, 2 do inside("slingshot " .. i, sl.p[k], sl.p[k+1]) end
+      end
+    end
     for i, t in ipairs(b.targets or {}) do inside("target " .. i, t.x, t.y) end
     if b.tube and b.tube.mouth then inside("tube.mouth", b.tube.mouth.x, b.tube.mouth.y) end
     if b.entry then inside("entry", b.entry.x, b.entry.y) end

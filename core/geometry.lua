@@ -82,8 +82,46 @@ local function segments_of(board)
     for i = 1, #poly - 3, 2 do
       segs[#segs+1] = {
         ax = poly[i], ay = poly[i+1], bx = poly[i+2], by = poly[i+3],
-        poly = pi, index = (i + 1) / 2,
+        poly = pi, index = (i + 1) / 2, label = "wall " .. pi,
       }
+    end
+  end
+  return segs
+end
+
+--- Everything on the board that is a solid closed outline rather than a
+--- chain: standup targets and slingshots. They obey exactly the same rules --
+--- a ball cannot pass a sub-ball-width throat, and nothing may sit inside a
+--- flipper's swept arc -- so they are checked through one list rather than
+--- one branch each. Slingshots were added to the board data after targets,
+--- and doing it any other way is how the second kind ends up unchecked.
+---@return table[] each { label, x, y, corners }
+local function solids_of(board)
+  local out = {}
+  for i, t in ipairs(board.targets or {}) do
+    out[#out+1] = { label = "target " .. i, x = t.x, y = t.y, c = M.rect_corners(t) }
+  end
+  for i, sl in ipairs(board.slingshots or {}) do
+    local c = sl.p
+    out[#out+1] = {
+      label = "slingshot " .. i, c = c,
+      x = (c[1] + c[3] + c[5]) / 3, y = (c[2] + c[4] + c[6]) / 3,
+    }
+  end
+  return out
+end
+
+--- A solid's outline as segments, so the flipper-arc check can treat it
+--- exactly like a wall.
+local function solid_segments(solids)
+  local segs = {}
+  for _, s in ipairs(solids) do
+    local n = #s.c / 2
+    for e = 0, n - 1 do
+      local i = e * 2 + 1
+      local j = (e + 1) % n * 2 + 1
+      segs[#segs+1] = { ax = s.c[i], ay = s.c[i+1], bx = s.c[j], by = s.c[j+1],
+                        label = s.label }
     end
   end
   return segs
@@ -182,8 +220,8 @@ local function check_flipper_arcs(board, segs, out)
     if worst then
       out[#out+1] = {
         kind = "flipper-jam", x = worst.x, y = worst.y,
-        msg = ("wall %d passes through the %s flipper's swept arc at (%.0f, %.0f), %.1fpx from the pivot")
-              :format(worst.seg.poly, f.side, worst.x, worst.y, worst.r),
+        msg = ("%s passes through the %s flipper's swept arc at (%.0f, %.0f), %.1fpx from the pivot")
+              :format(worst.seg.label, f.side, worst.x, worst.y, worst.r),
       }
     end
   end
@@ -249,21 +287,31 @@ local function check_wedges(board, segs, out)
     end
   end
 
-  -- Targets are solid too: a standup parked a sub-ball-width from a wall is
-  -- a pocket in exactly the way a bumper is, and it is easier to author by
-  -- accident because a target is small and its angle is easy to get wrong.
-  for ti, t in ipairs(board.targets or {}) do
-    local c = M.rect_corners(t)
-    for e = 0, 3 do
-      local i = e * 2 + 1                      -- this corner
-      local j = ((e + 1) % 4) * 2 + 1          -- the next one, wrapping
+  -- Targets and slingshots are solid too: a standup parked a sub-ball-width
+  -- from a wall is a pocket in exactly the way a bumper is, and it is easier
+  -- to author by accident because it is small and its angle is easy to get
+  -- wrong. A slingshot is bigger and sits in the tightest part of the board,
+  -- between an inlane and a flipper, so it is easier still.
+  local solids = solids_of(board)
+  local function outline(sol)
+    local n, es = #sol.c / 2, {}
+    for e = 0, n - 1 do
+      local i = e * 2 + 1
+      local j = (e + 1) % n * 2 + 1
+      es[#es+1] = { sol.c[i], sol.c[i+1], sol.c[j], sol.c[j+1] }
+    end
+    return es
+  end
+
+  for si, sol in ipairs(solids) do
+    for _, ed in ipairs(outline(sol)) do
       for _, w in ipairs(segs) do
-        local d = seg_seg(c[i], c[i+1], c[j], c[j+1], w.ax, w.ay, w.bx, w.by)
+        local d = seg_seg(ed[1], ed[2], ed[3], ed[4], w.ax, w.ay, w.bx, w.by)
         if d < BALL_D then
           out[#out+1] = {
-            kind = "wedge", x = t.x, y = t.y,
-            msg = ("target %d sits %.1fpx from wall %d; the ball is %.1fpx wide")
-                  :format(ti, d, w.poly, BALL_D),
+            kind = "wedge", x = sol.x, y = sol.y,
+            msg = ("%s sits %.1fpx from %s; the ball is %.1fpx wide")
+                  :format(sol.label, d, w.label, BALL_D),
           }
         end
       end
@@ -274,24 +322,35 @@ local function check_wedges(board, segs, out)
     -- wide -- at which point they overlap into one bar on screen and form a
     -- throat between them in the physics. Both happened on the first draft of
     -- Glasshouse's bank, and only the picture gave it away.
-    for tj = ti + 1, #board.targets do
-      local o = board.targets[tj]
-      local oc = M.rect_corners(o)
+    for sj = si + 1, #solids do
+      local other = solids[sj]
       local best = math.huge
-      for e1 = 0, 3 do
-        local a1, b1 = e1 * 2 + 1, ((e1 + 1) % 4) * 2 + 1
-        for e2 = 0, 3 do
-          local a2, b2 = e2 * 2 + 1, ((e2 + 1) % 4) * 2 + 1
-          best = math.min(best, seg_seg(c[a1], c[a1+1], c[b1], c[b1+1],
-                                        oc[a2], oc[a2+1], oc[b2], oc[b2+1]))
+      for _, e1 in ipairs(outline(sol)) do
+        for _, e2 in ipairs(outline(other)) do
+          best = math.min(best, seg_seg(e1[1], e1[2], e1[3], e1[4],
+                                        e2[1], e2[2], e2[3], e2[4]))
         end
       end
       if best < BALL_D then
         out[#out+1] = {
-          kind = "wedge", x = t.x, y = t.y,
-          msg = ("targets %d and %d are %.1fpx apart; the ball is %.1fpx wide")
-                :format(ti, tj, best, BALL_D),
+          kind = "wedge", x = sol.x, y = sol.y,
+          msg = ("%s and %s are %.1fpx apart; the ball is %.1fpx wide")
+                :format(sol.label, other.label, best, BALL_D),
         }
+      end
+    end
+
+    -- A solid against a bumper is the same pocket again.
+    for bi, bump in ipairs(board.bumpers or {}) do
+      for _, ed in ipairs(outline(sol)) do
+        local d = (point_seg(bump.x, bump.y, ed[1], ed[2], ed[3], ed[4])) - bump.r
+        if d < BALL_D then
+          out[#out+1] = {
+            kind = "wedge", x = sol.x, y = sol.y,
+            msg = ("%s sits %.1fpx from bumper %d; the ball is %.1fpx wide")
+                  :format(sol.label, d, bi, BALL_D),
+          }
+        end
       end
     end
   end
@@ -375,8 +434,14 @@ end
 function M.check(board)
   local out = {}
   local segs = segments_of(board)
+  -- Bowls are a property of the wall chains alone -- a solid has no vertices
+  -- the ball can settle in, because it has no inside. The arc check does see
+  -- them: a slingshot inside a flipper's sweep jams the flipper.
+  local arc_segs = { }
+  for _, sg in ipairs(segs) do arc_segs[#arc_segs+1] = sg end
+  for _, sg in ipairs(solid_segments(solids_of(board))) do arc_segs[#arc_segs+1] = sg end
   check_bowls(board, segs, out)
-  check_flipper_arcs(board, segs, out)
+  check_flipper_arcs(board, arc_segs, out)
   check_wedges(board, segs, out)
   check_devices(board, segs, out)
   table.sort(out, function(a, b)

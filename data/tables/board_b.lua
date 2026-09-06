@@ -4,72 +4,102 @@
 --- and in docs/design.md. The short version: Foundry is where a rally
 --- SURVIVES, Glasshouse is where it PAYS.
 ---
----   Foundry     chaotic, forgiving, cheap. A bumper cluster in the orbit
----               keeps the ball alive and crowds the aim. Ball life 12.19s,
----               24 points/s, pass 54%.
----   Glasshouse  clean, precise, expensive. No bumpers, a bank of standup
----               targets worth 5x a bumper, and a drain gap 16px wider.
----               Ball life 9.05s, 351 points/s, pass 66% -- the easiest
----               shot in the game to aim, and the shortest ball.
+--- Re-measured on the boards-v2 layout (probe_identity + probe_reach):
 ---
---- That makes the pass the decision design.md §6.2 asks for, one level up
---- from the devices: do I keep the rally safe, or do I send it somewhere it
---- can actually score? A hot rally is worth more on Glasshouse and more
---- likely to die there, which is §9's risk curve expressed as geometry.
+---   Foundry     chaotic, forgiving, cheap. A bumper nest across the top of
+---               the board keeps the ball alive and crowds the aim. Ball life
+---               9.46s, 18 points/s, swept pass 50%, drains 0.0793/s.
+---   Glasshouse  clean, precise, expensive. No bumpers, a two-target bank in
+---               the left field, and a drain gap 16px wider. Ball life 5.76s,
+---               192 points/s, swept pass 50%, drains 0.1533/s.
 ---
---- The previous identity claim -- "easy to aim, punishing to sit on" -- was
---- never checked and was measurably backwards: Glasshouse had the HIGHER
---- survival rate of the two boards (27% against Foundry's 15%). It was the
---- safer board wearing the dangerous board's description.
+--- Glasshouse pays 10.7x per second of ball time and kills the ball nearly
+--- twice as fast. That makes the pass the decision design.md §6.2 asks for,
+--- one level up from the devices: do I keep the rally safe, or send it
+--- somewhere it can actually score?
+---
+--- The gap between the boards WIDENED when they grew. Glasshouse used to
+--- drain only 7% faster than Foundry despite its wider gap, which made the
+--- identity a claim more than a fact; the outlanes cost it far more than they
+--- cost Foundry, because a wider flipper gap also means a longer unguarded
+--- run down each side. That was not designed and it is worth keeping.
 ---
 --- Deliberately not a mirror of A (design.md §7): the handedness is flipped so
 --- the two boards read differently at a glance, but the upper field differs in
 --- kind, not just in layout.
+---
+--- Grown to 448 x 960 in boards-v2 phase 0. x shifts +32 everywhere; y shifts
+--- +192 for the flipper furniture only, so the ramp mouth ends up 340px above
+--- the pivots instead of 148px and the new room lands in the approach rather
+--- than above the arc. board_a.lua carries the full note, including the
+--- version of this edit that did it the other way round and broke both
+--- boards' upper content.
 
 local pi = math.pi
 
 return {
   id   = "b",
   name = "Glasshouse",
-  size = { w = 384, h = 768 },
+  size = { w = 448, h = 960 },
 
   walls = {
     -- Outer shell: right wall, top arc, left wall.
-    { 374,610,  374,90,  314,14,  70,14,  10,90,  10,656 },
-    -- Lower right: monotone descent, ending just outside the pivot.
-    { 374,610,  330,656,  296,672,  262,683 },
-    -- Lower left: was V-shaped at (84,702) and trapped the ball.
-    { 10,656,  44,672,  90,679,  123,683 },
-    -- The pass ramp, left of centre: the left flipper's natural shot.
+    -- Outer shell: right wall, top arc, left wall. Both side walls run past
+    -- the drain line -- they are the outer wall of an outlane.
+    { 438,948,  438,90,  372,14,  76,14,  10,90,  10,948 },
+    -- The traditional bottom, same construction as Foundry's -- see
+    -- board_a.lua for what each chain is and why the outlanes matter. The
+    -- inlane floors end further apart here because Glasshouse's flippers
+    -- are, which is the board's whole identity.
+    { 36,700,  40,852,  104,864,  153,873 },
+    { 412,700,  408,852,  344,864,  295,873 },
+    -- The pass ramp, left of centre: the right flipper's cross-body shot,
+    -- where Foundry's is the left flipper's. Shortened to end at y=380 for
+    -- the reason given at length in board_a.lua -- a long centre channel is a
+    -- wall across the board, and it is why neither board's upper playfield
+    -- was reachable.
     --
-    -- Raised from y=600 for the reason given in board_a.lua -- a mouth 88px
-    -- above the pivots intercepts every shot before it can travel sideways.
-    -- B responds differently to A, though, and better: raising it makes the
-    -- pass EASIER rather than harder, because B's ramp is off-centre and the
-    -- extra height lets the right flipper feed it cleanly.
+    --   swept shots        pass   drain   left orbit   right orbit
+    --   old 384x768 board   66%     34%           6%          10%
+    --   boards-v2           50%     44%          36%          30%
     --
-    --   mouth y   pass   right field
-    --      600     58%          4%
-    --      570     62%          6%
-    --      540     66%         10%   <- here
-    --      510     50%         42%
+    -- Glasshouse gave up 16 points of pass rate for a playfield with six
+    -- times the reach. It is still the board you pass FROM by received-ball
+    -- rate -- 62% against Foundry's 32% -- which is the number that decides
+    -- whether a rally continues.
     --
-    -- 66% against Foundry's 52% is the identity in one number: Glasshouse is
-    -- the board you pass FROM. y=510 opens the right field much further but
-    -- costs the thing that makes this board itself.
-    { 116,540,  143,480,  143,150 },
-    { 222,540,  195,480,  195,150 },
+    -- x=201 is reachable from both flippers (3 left / 6 right of 8 contact
+    -- points swept). The right-flipper bias is the handedness: Foundry's ramp
+    -- reads 5 left / 3 right at x=236.
+    --
+    { 148,560,  175,500,  175,380 },
+    { 254,560,  227,500,  227,380 },
     -- Roof over the ramp head -- see board_a.lua for why this is not optional.
-    { 143,150,  169,128,  195,150 },
-    -- One deflector rail left in the upper right, to feed the bank below it.
-    -- There used to be two, and prototype.md called them "not yet a
-    -- character, just an absence of one". The lower one has become the bank.
-    -- They must not meet -- crossed, they formed a funnel that caught 19 of
-    -- 182 test drops.
-    { 236,236,  320,300 },
+    { 175,380,  201,358,  227,380 },
+    -- The deflector rail is gone. It survived two redesigns as "one rail left
+    -- in the upper right, to feed the bank below it", and both times the bank
+    -- it fed measured a dead target: a single sloping rail does not split a
+    -- stream, it aims one. probe_where puts Glasshouse's falling traffic down
+    -- the LEFT of the ramp, so the bank went there instead and the rail had
+    -- nothing left to do.
   },
 
   bumpers = {},  -- none: chaos is Foundry's job
+
+  -- Two slingshots, one above each flipper, hypotenuse facing up-board and
+  -- roughly parallel to the flipper below it. A ball coming down the side
+  -- meets the face and is thrown back across the playfield instead of rolling
+  -- into the drain, which is what fills the 340px of empty approach the ramp
+  -- vacated when the board grew.
+  --
+  -- The tip stops 28px short of the pivot in x. Closer than that and the
+  -- triangle reaches inside the flipper's swept arc, which the geometry gate
+  -- rejects: at pivot-24 it is 56.3px from the pivot against a 52.96px reach.
+  slingshots = {
+    { p = { 66,772,  132,822,  66,830 } },
+    { p = { 382,772, 316,822, 382,830 } },
+  },
+
 
   -- B's character, and the only aimed scoring content in the game. Placed
   -- along the line the lower rail used to occupy, which the reach map puts
@@ -99,14 +129,14 @@ return {
   -- probe's timeout, with a drain rate of exactly zero. The ball rattled in
   -- the bank forever. Balance is not worth a board the ball cannot leave.
   targets = {
-    { x = 244, y = 400, w = 28, h = 9, angle = 0, bank = "vault" },
-    { x = 336, y = 400, w = 28, h = 9, angle = 0, bank = "vault" },
+    { x = 56,  y = 470, w = 28, h = 9, angle = 0, bank = "vault" },
+    { x = 124, y = 470, w = 28, h = 9, angle = 0, bank = "vault" },
   },
 
   flippers = {
     -- Wider gap than A. B drains.
-    { side = "left",  x = 128, y = 688 },
-    { side = "right", x = 256, y = 688 },
+    { side = "left",  x = 160, y = 880 },
+    { side = "right", x = 288, y = 880 },
   },
 
   devices = {
@@ -114,7 +144,7 @@ return {
       id     = "gate",
       kind   = "gate",
       travel = 0.30,
-      pivot  = { x = 195, y = 215 },
+      pivot  = { x = 227, y = 445 },
       length = 52,
       closed = pi - 0.13,    -- arm seals the ramp
       -- 3pi/2, not -pi/2: the gate lerps between these angles, and the negative
@@ -173,8 +203,8 @@ return {
       -- rate per pixel between 711 and 715 -- because the post is a flat bar
       -- and a shot either clears it or does not. Treat any edit to this
       -- number as a redesign of the device and re-run tests/probe_post.lua.
-      up     = { x = 192, y = 713 },
-      down   = { x = 192, y = 790 },
+      up     = { x = 224, y = 905 },
+      down   = { x = 224, y = 982 },
       w = 52, h = 12,
       tradeoff = "Guards the centre drain; the pass gets much harder.",
       label_closed = "OPEN",
@@ -190,9 +220,9 @@ return {
     { when = "bank:vault", lights = { board = "a", what = "bumpers" } },
   },
 
-  tube  = { mouth = { x = 169, y = 168, r = 14 }, to = "a" },
-  entry = { x = 338, y = 104, dir = { x = -0.32, y = 1 } },
-  serve = { x = 45,  y = 560, dir = { x = 0, y = -1 } },
+  tube  = { mouth = { x = 201, y = 398, r = 14 }, to = "a" },
+  entry = { x = 370, y = 104, dir = { x = -0.32, y = 1 } },
+  serve = { x = 48,  y = 660, dir = { x = 0, y = -1 } },
 
-  drain_y = 748,
+  drain_y = 940,
 }
