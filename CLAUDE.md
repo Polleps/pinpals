@@ -24,6 +24,14 @@ detached worktree. Worth running before handing work over: a commit message clai
 green is worth exactly as much as the shell that produced it, and `make check | tail &&
 git commit` silently tests whether `tail` succeeded.
 
+`love .` watches `data/tables/*.lua` and reloads the boards on save -- a board that
+will not compile or will not validate leaves the running game alone and puts the
+error on screen, so a typo mid-edit cannot end a playtest. `--no-hot` turns the
+watcher off; `F5` forces a reload. In-game keys: `F1` debug readout, `F2` the
+coordinate overlay (every number the data file names, plus the cursor's own
+position; `TAB` swaps which board it reads), `R` restart. `make coords BOARD=b`
+captures that overlay to a PNG.
+
 `make check` is the only gate that matters: layers, lint, types, static board geometry,
 core tests, headless physics, and a 60s integration soak. ~3.6s. Run it before claiming
 anything is done. `make run` plays; `make shot TICKS=N` renders a frame to a PNG —

@@ -1242,4 +1242,52 @@ first second of every ball, so handing it back at the start of each ball just ha
 something new to be spent by. Two iterations have now flagged that plunger for three
 separate reasons; it is the next thing to move.
 
+## Iteration 33 — editing a board without restarting the game
+
+Boards are data, and every board bug so far has been a coordinate nobody had looked
+at. The loop that finds those is edit, save, look — and `save` was followed by quit,
+`love .`, serve, and waiting for the ball to come back to the part of the board you
+were looking at. Two changes, both of them tooling rather than game:
+
+**`love .` now reloads the boards when a board file changes.** It watches contents
+rather than mtime, because LÖVE's modtime is whole seconds and two saves inside one
+second is exactly what nudging a coordinate looks like. `--no-hot` turns it off, `F5`
+forces one.
+
+**A reload that fails changes nothing.** This is the part that decides whether the
+watcher is a tool or a liability: a board that will not compile, or compiles but will
+not validate, leaves the running game on the last good boards and puts the error on
+screen. Checked against the running game rather than asserted:
+
+```
+  boards reloaded (data/tables/board_a.lua)
+  board reload failed - still playing the last good boards
+    board a: Syntax error: data/tables/board_a.lua:322: '<eof>' expected near 'this'
+  board reload failed - still playing the last good boards
+    board a: flippers: expected exactly 2
+  boards reloaded (data/tables/board_a.lua)
+```
+
+A successful reload also runs the geometry gate on the spot — bowls, walls inside a
+flipper's arc, throats narrower than the ball — and puts any defect on screen. It is
+pure Lua and takes microseconds, and it is the check most likely to have something to
+say about an edit that just moved a wall.
+
+**`F2` draws every coordinate the data file names.** A labelled 32px grid, a dot on
+each point, the cursor's own board position, and a hover readout that names the point
+in full (`walls[2][3]`) so you know which line you are looking at. The rule it follows
+is that it labels *exactly* the numbers that appear in `data/tables/*.lua` and no
+others: a wall is a polyline, so every vertex is labelled; a target is a centre plus a
+width and a height, so the centre is labelled and the corners are only outlined. A
+derived corner coordinate is a number you cannot search the file for.
+
+The inspected board is the one the camera enlarges and `TAB` swaps it, so Glasshouse
+can be read while the ball is on Foundry. `make coords BOARD=b` captures the same
+overlay to a PNG.
+
+The reload path is tested where it can be: `tests/data/reload_spec.lua` covers the one
+property the whole thing rests on — that loading twice re-runs the board chunks rather
+than handing back what `require` cached — plus both failure paths and the guarantee
+that a failed load leaves nothing poisoned behind it.
+
 *(iterations append here)*
