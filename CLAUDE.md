@@ -19,11 +19,6 @@ Since this is a game, performance might take precedence over code quality in cri
 
 ## Tooling
 
-`./scripts/verify_history.sh` runs `make check` at every commit on the branch, in a
-detached worktree. Worth running before handing work over: a commit message claiming
-green is worth exactly as much as the shell that produced it, and `make check | tail &&
-git commit` silently tests whether `tail` succeeded.
-
 `love .` watches `data/tables/*.lua` and reloads the boards on save -- a board that
 will not compile or will not validate leaves the running game alone and puts the
 error on screen, so a typo mid-edit cannot end a playtest. `--no-hot` turns the
