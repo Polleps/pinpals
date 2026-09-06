@@ -3,6 +3,7 @@ package.path = "./?.lua;./?/init.lua;" .. package.path
 local H = require("tests.harness")
 require("tests.core.spec")(H)
 require("tests.core.geometry_spec")(H)
+require("tests.data.reload_spec")(H)
 require("tests.app.fx_spec")(H)
 require("tests.app.record_spec")(H)
 require("tests.app.input_spec")(H)

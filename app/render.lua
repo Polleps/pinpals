@@ -73,9 +73,13 @@ function M.attach_fx(module)
   if fonts then fx.set_font(fonts.body) end
 end
 
+--- Called again after a hot reload, because the layout is derived from the
+--- boards' own size and a board that grows changes every scale on screen. The
+--- fonts are kept: they do not depend on the board data, and rebuilding them
+--- on every save leaks a texture atlas per edit.
 function M.load(defs)
   layout(defs)
-  fonts = {
+  fonts = fonts or {
     small = love.graphics.newFont(11),
     body  = love.graphics.newFont(14),
     head  = love.graphics.newFont(20),
@@ -832,13 +836,95 @@ local function draw_hud(state, defs, snaps, legend)
 
   love.graphics.setFont(fonts.small)
   col(1, 1, 1, 0.28)
-  love.graphics.print("R restart    F1 debug    ESC quit", M.hud_x, H - 26)
+  love.graphics.print("R restart   F1 debug   F5 reload   ESC quit", M.hud_x, H - 26)
+end
+
+---------------------------------------------------------------------------
+-- Notices
+---------------------------------------------------------------------------
+
+--- A hot reload has something to say and nowhere to say it: the terminal is
+--- behind the game window, and a board file that fails to compile has to be
+--- readable without alt-tabbing or the edit loop is still a two-window job.
+---
+--- Good news fades; bad news does not. A validation error or a geometry defect
+--- stays on screen until the next reload clears it, because it is a to-do list
+--- and the next save is exactly when you want to know whether it worked.
+---@class Notice
+---@field head string
+---@field lines string[]
+---@field kind string
+---@field born number
+
+---@type Notice|nil
+local notice = nil
+
+local NOTICE_FADE = 3.0
+local NOTICE_MAX  = 8
+
+local NOTICE_INK = {
+  ok    = { 0.55, 1.00, 0.70 },
+  warn  = { 1.00, 0.82, 0.35 },
+  error = { 1.00, 0.45, 0.42 },
+}
+
+---@param head string one-line headline
+---@param lines string[]|nil detail, e.g. validation errors
+---@param kind "ok"|"warn"|"error"
+function M.set_notice(head, lines, kind)
+  notice = { head = head, lines = lines or {}, kind = kind or "ok",
+             born = love.timer.getTime() }
+end
+
+function M.clear_notice() notice = nil end
+
+local function notice_alpha()
+  if not notice then return 0 end
+  if notice.kind ~= "ok" then return 1 end
+  local age = love.timer.getTime() - notice.born
+  if age > NOTICE_FADE then return 0 end
+  return math.min(1, (NOTICE_FADE - age) / 0.6)
+end
+
+local function draw_notice()
+  local a = notice_alpha()
+  if not notice or a <= 0.01 then return end
+  local ink = NOTICE_INK[notice.kind] or NOTICE_INK.ok
+
+  love.graphics.setFont(fonts.small)
+  local shown = math.min(#notice.lines, NOTICE_MAX)
+  local extra = #notice.lines - shown
+  local rows  = shown + (extra > 0 and 1 or 0)
+  local w, h  = math.min(760, W - 48), 26 + rows * 13
+  local x, y  = (W - w) / 2, 12
+
+  love.graphics.setColor(0.03, 0.03, 0.04, 0.93 * a)
+  love.graphics.rectangle("fill", x, y, w, h, 5)
+  love.graphics.setColor(ink[1], ink[2], ink[3], 0.85 * a)
+  love.graphics.rectangle("line", x, y, w, h, 5)
+
+  love.graphics.setFont(fonts.body)
+  love.graphics.setColor(ink[1], ink[2], ink[3], a)
+  love.graphics.print(notice.head, x + 10, y + 5)
+
+  love.graphics.setFont(fonts.small)
+  love.graphics.setColor(1, 1, 1, 0.75 * a)
+  for i = 1, shown do
+    love.graphics.printf(notice.lines[i], x + 10, y + 22 + (i - 1) * 13, w - 20, "left")
+  end
+  if extra > 0 then
+    love.graphics.setColor(1, 1, 1, 0.45 * a)
+    love.graphics.print(("... and %d more (full list in the terminal)"):format(extra),
+                        x + 10, y + 22 + shown * 13)
+  end
 end
 
 
 ---------------------------------------------------------------------------
 
-function M.draw(match, legend, debug_on)
+---@param flags table|nil { debug = boolean }
+function M.draw(match, legend, flags)
+  flags = flags or {}
   love.graphics.clear(0.045, 0.045, 0.058)
   local state = match.state
   local heat  = heat_of(state)
@@ -864,7 +950,9 @@ function M.draw(match, legend, debug_on)
   HA = 1
   love.graphics.pop()
 
-  if debug_on then
+  draw_notice()
+
+  if flags.debug then
     love.graphics.setFont(fonts.small)
     love.graphics.setColor(0.5, 1, 0.5, 0.8)
     local b = match.boards[state.active]

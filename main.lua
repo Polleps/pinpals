@@ -2,19 +2,34 @@
 ---   love .            play
 ---   love . --test     headless physics tests, results to stdout (§7)
 ---   love . --shot N   run N fixed steps, screenshot, quit (§7 visual check)
+---
+--- Play mode watches data/tables/*.lua and reloads the boards when one
+--- changes (--no-hot turns that off; F5 forces one). Board layouts are data,
+--- and every board bug so far has been a coordinate -- a coordinate you can
+--- only judge by looking at it, which means the loop that matters is edit,
+--- save, look. Restarting the game for each nudge put a build in the middle
+--- of that loop.
+
+-- Redirected to a file or a pipe, stdout is fully buffered and nothing this
+-- game prints appears until it exits -- which is no use to a hot reload, whose
+-- whole job is to tell you something in the second after you saved.
+io.stdout:setvbuf("line")
 
 local C = require("core.constants")
 
 local mode, shot_ticks, shot_open, shot_pass = "play", 240, false, false
+local hot_on = true
 
 for i, v in ipairs(arg or {}) do
   if v == "--test" then mode = "test" end
   if v == "--shot" then mode = "shot"; shot_ticks = tonumber(arg[i + 1]) or 240 end
   if v == "--open" then shot_open = true end
   if v == "--pass" then shot_open = true; shot_pass = true end
+  if v == "--no-hot" then hot_on = false end
 end
 
 local match, render, input, audio, fx, record, boards
+local hot = require("app.hotreload")
 local debug_on = false
 local shot_done = false
 
@@ -94,6 +109,66 @@ function love.load()
   -- §5.1: the intent stream makes a session recordable for free. Only in
   -- play mode -- --test and --shot never touch the disk.
   record.start(boards)
+
+  if hot_on then
+    local paths = require("data.tables.init").sources()
+    hot.watch(paths)
+    print("hot reload: watching " .. table.concat(paths, ", ") .. "  (--no-hot to disable)")
+  end
+end
+
+---------------------------------------------------------------------------
+-- Board reload (§ boards are data, and data you can only judge by looking)
+---------------------------------------------------------------------------
+
+--- Retire the running match and start a fresh one on `boards`. The bank comes
+--- first: those numbers leave with the Match that produced them, and the
+--- session log would otherwise report the wrong game.
+local function restart_match()
+  record.restart(match)
+  match = require("sim.match").new(boards)
+  fx.reset()
+end
+
+--- Report a reload's outcome to the screen and the terminal at once. The
+--- screen is where the person is; the terminal is where the whole list fits.
+local function announce(head, lines, kind)
+  render.set_notice(head, lines, kind)
+  print(head)
+  for _, l in ipairs(lines or {}) do print("  " .. l) end
+end
+
+--- Re-read the board files. A board that will not compile or will not
+--- validate leaves the running game exactly as it was and puts the error on
+--- screen -- a typo mid-edit must not be able to end a playtest, or the
+--- watcher is a liability rather than a tool.
+---@param why string what triggered it, for the notice
+---@return boolean reloaded
+local function reload_boards(why)
+  local fresh, errs = require("data.tables.init").try_load()
+  if not fresh then
+    announce("board reload failed - still playing the last good boards", errs, "error")
+    return false
+  end
+
+  boards = fresh
+  restart_match()
+  render.load(boards)          -- board size drives every scale on screen
+  render.attach_fx(fx)
+
+  -- The geometry gate, on the spot. It is pure Lua and takes microseconds, and
+  -- it is the check most likely to have something to say about an edit that
+  -- just moved a wall: bowls, walls inside a flipper's arc, throats narrower
+  -- than the ball. Finding that out on save beats finding it out in `make
+  -- check` after a session of wondering why the ball sticks.
+  local clean, lines = require("core.geometry").report(boards)
+  if clean then
+    announce(("boards reloaded (%s)"):format(why), {}, "ok")
+  else
+    announce(("boards reloaded (%s) - %d geometry defect(s)"):format(why, #lines),
+             lines, "warn")
+  end
+  return true
 end
 
 --- Every intent goes through here, so the recording cannot miss one by
@@ -106,6 +181,12 @@ end
 
 function love.update(dt)
   if mode ~= "play" then return end
+
+  -- Before the step, so a reload's brand-new match is what this frame
+  -- advances rather than one tick of the match that is about to be discarded.
+  local changed = hot.poll(dt)
+  if changed then reload_boards(changed) end
+
   match:advance(dt)
   -- Drained once and shared: audio and fx must see the same events, and
   -- whichever called drain_events() second would otherwise see none.
@@ -121,7 +202,7 @@ function love.draw()
 
   if mode == "shot" then
     render.update_camera(match.state, boards, 1)   -- snap the camera, no easing
-    render.draw(match, { input.legend(1), input.legend(2) }, true)
+    render.draw(match, { input.legend(1), input.legend(2) }, { debug = true })
     if not shot_done then
       shot_done = true
       local name = ("shot-%d.png"):format(shot_ticks)
@@ -134,7 +215,7 @@ function love.draw()
     return
   end
 
-  render.draw(match, { input.legend(1), input.legend(2) }, debug_on)
+  render.draw(match, { input.legend(1), input.legend(2) }, { debug = debug_on })
 end
 
 ---------------------------------------------------------------------------
@@ -145,14 +226,15 @@ function love.keypressed(key)
   if mode ~= "play" then return end
   if key == "escape" then love.event.quit() return end
   if key == "f1" then debug_on = not debug_on return end
-  if key == "r" then
-    -- Bank the run before discarding it, or its numbers leave with the Match
-    -- that produced them and the session log reports the wrong game.
-    record.restart(match)
-    match = require("sim.match").new(boards)
-    fx.reset()
+  if key == "f5" then
+    -- A manual reload re-stamps the watcher too, or the same edit comes back
+    -- a quarter of a second later as an automatic one and restarts the match
+    -- a second time.
+    reload_boards("F5")
+    hot.resync()
     return
   end
+  if key == "r" then restart_match() return end
   push_intent(input.from_key(key, true, match.state.tick))
 end
 
