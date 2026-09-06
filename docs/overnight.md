@@ -1030,4 +1030,84 @@ code does.
 **§10** — all four presentation items are built; each now says how, including the one
 that needed correcting along the way.
 
+### Iteration 29 — the boards get bigger, and the middle stops being a wall · `15493c6` `8e840ac`
+
+Asked for a plan to make the boards more interesting: bigger, more features, two
+slingshots, two side lanes, and a ramp that is not sitting on the flippers. Ran
+`probe_reach` before writing anything, and three of those four turned out to be one
+root cause.
+
+**The pass ramp was a 106×390px channel down the dead centre of a 384px board.** A
+flipper shot cannot travel far enough sideways to get past it, so Foundry measured 0%
+right-orbit reach and nothing at all above y=280 outside the channel. The upper
+playfield was never sparse; it was *unreachable*. Board A's own comments record this
+being fought at the wrong end — the mouth was raised 600 → 540 to buy 14%/10% orbit
+reach, and the note admits the trade is monotonic. It is monotonic because the *width*
+of the obstruction was never the variable.
+
+```
+  swept shots        pass   drain   left orbit   right orbit
+  Foundry  before     54%     44%          14%           0%
+  Foundry  after      50%     28%          40%          30%
+  Glasshouse before   66%     34%           6%          10%
+  Glasshouse after    50%     44%          36%          30%
+```
+
+Boards are now 448×960 with a traditional bottom — outlane, divider, inlane and a
+slingshot down each side — five bumpers on Foundry, four standups in two banks on
+Glasshouse, and channels that end at y=380 instead of running to y=150. The plan is
+`docs/boards-v2.md`, which now also says which of itself is built.
+
+**Four things this cost a wrong answer to first.**
+
+*There is no neutral resize.* Phase 0 was supposed to be "grow the canvas, measure the
+resize alone". Putting the 192px at the top lengthened the orbit climb and made
+Foundry's bumper 1 and Glasshouse's entire bank unreachable — caught by the existing
+reachability tests, not by anything static. The room has to go where the complaint is,
+between the flippers and the ramp, and that is a design change. Phases 0, 2 and 3
+landed as one edit.
+
+*Raising the mouth alone breaks the pass; shortening the channel gives it back.* At one
+point the pass was 0 of 8 from Foundry's right flipper. Mouth height and channel length
+are one decision, and `tests/probe_ramp.lua` exists to sweep them together.
+
+*The ball falls straight down, so nothing may sit under anything else.* Four upper-field
+placements were authored and measured at exactly zero hits. A real bumper nest stays
+live because the ball enters at every angle; a top-down board does not produce those
+angles up there. Content goes in a band, never a stack. `tests/probe_where.lua` now
+answers "where does a falling ball cross this line" *before* anything is placed.
+
+*A probe that lies is worse than no probe.* `probe_identity` treated every target on a
+board as one bank and cleared the lit set at the start of every ball, where
+`core/state.lua` completes per bank and keeps lit state for the life of the match.
+Accurate while Glasshouse had exactly two targets in one bank; wrong the moment it had
+four in two. It reported ONE bank completion where the rules produce twenty-one, and
+put points/s at 87 instead of 242. Two design-doc tables nearly shipped with those
+numbers in them, which is this file's oldest lesson arriving by a new route.
+
+**One test changed, and it is worth defending.** The received-ball test modelled a
+player with a single flip. That was enough to measure the old boards because every shot
+on them ended at the ramp or the drain. It now re-arms, and the difference is entirely
+in CENTRE drains — 60 across 200 attempts with one flip, 3 with re-arming — while
+outlane losses are unchanged. That is the shape of real pinball: the flipper defends
+the middle and the sides are what kill you. A better model, not a lower bar.
+
+**The identities diverged, which is the point.**
+
+```
+  board        gap   ball life   drains/s   points/s
+  Foundry     27.6      10.76s     0.0666         14
+  Glasshouse  43.6       5.40s     0.1543        242
+```
+
+Glasshouse used to drain 7% faster than Foundry despite a 16px wider gap, so "forgiving
+versus deadly" was a claim rather than a fact. It now drains 2.3× faster and pays 17×
+per second. Foundry gained two outlanes and came out *safer* per second than before,
+because five bumpers keep the ball up the board.
+
+**Still open, and flagged in `boards-v2.md`:** Glasshouse at 5.40s a ball may be too
+deadly, and outlane width is the knob. Foundry still has a visibly empty band between
+its bumper nest and its slingshots. Rollovers, drop targets, a spinner and a shooter
+lane are specified and unbuilt.
+
 *(iterations append here)*
