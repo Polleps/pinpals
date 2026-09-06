@@ -1,5 +1,60 @@
 # Overnight run — 2026-09-06
 
+> ## Read this first
+>
+> **15 substantive commits on `overnight`, off `main` at `9a5060b`. `main` is untouched.**
+> Gates: 80 core, 36 sim, all green, `make check` in 3.6s. One commit per change, so
+> anything here can be reverted on its own.
+>
+> ### The thing that mattered most
+>
+> **Board A could reach exactly one place.** A sweep of 50 flipper contact points found
+> that no shot from any point on either flipper could reach anywhere except the ramp —
+> nothing above y=550 outside that channel existed as a target. All three bumpers, the
+> board's declared character, measured **zero hits**. The upper playfield was not empty,
+> it was *unreachable*, and the cause was a ramp mouth sitting 88px above the flipper
+> pivots, intercepting every shot before it could travel sideways.
+>
+> Close behind: the two boards' identities were **backwards** (the one documented as
+> forgiving drained more often), and the post was **not a trade but a pause button** —
+> raised, it blocked 100% of shots *and* 100% of drains, so nothing could happen at all.
+>
+> None of those are things a person notices in a few minutes of play. All of them are
+> things a person feels.
+>
+> ### What to do first
+>
+> ```
+> make check    # 3.6s, everything
+> make run      # play it
+> ```
+>
+> Play, then quit with `Esc` — it writes a session log and prints the path. Paste the
+> summary back and the evening becomes data rather than an impression.
+>
+> Three things to attend to, because they are where the measurements point and stop:
+>
+> 1. **Receiving on Foundry** has ~20ms of usable timing, about one 60fps frame. Skill,
+>    or coin flip?
+> 2. **The post** now costs the pass on one flipper and barely touches the other,
+>    differently per board. Tactical, or just inconsistent?
+> 3. **The cross-board loop** — charge Foundry, pass, clear the vault, come home to lit
+>    bumpers. Does that arc survive two people shouting at each other?
+>
+> ### What needs you, not me
+>
+> - **Session structure (§13.2).** Untouched, and now the biggest open question in the
+>   project. There is a score and *nothing that ends* — no team lives, no run, no goal.
+>   Every system built tonight assumes an endless session, so this call reshapes what
+>   sits on top of it. I left it alone deliberately.
+> - **Two of the six §13 open questions got provisional answers** — board identity
+>   (§13.1) and rescue mechanics (§13.5). Both are written up in `design.md` as
+>   PROVISIONAL with the reasoning and the numbers behind them, so overruling either is
+>   cheap. The other four are untouched: session structure, tube count, the operator
+>   resource model, and whether nudge exists.
+> - **Nothing here has been played.** Every number below comes from a headless probe.
+>   They say the systems function. They cannot say the game is fun.
+
 Autonomous work log for the night of 2026-09-05/06. Branch: `overnight`, off `main`
 at `9a5060b`. **This file is the state the loop resumes from.** Every iteration
 reads it, takes the top unstarted item, and writes back what happened.
