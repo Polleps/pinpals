@@ -114,8 +114,13 @@ return function()
 
   -- Lead time before predicted contact. 0.02s is "flip as it arrives";
   -- larger values flip progressively earlier.
+  -- Negative lead is not an error case, it is the ordinary pinball shot: the
+  -- ball is already resting on the flipper, below the pivot line, when you
+  -- flip. Sweeping only positive leads truncates the curve, and the first
+  -- version of this probe reported Foundry's window as 20ms by measuring
+  -- nothing but the falling tail of a peak that sits off the left edge.
   local DELAYS = {}
-  for ms = 5, 85, 5 do DELAYS[#DELAYS+1] = ms / 1000 end
+  for ms = -60, 85, 5 do DELAYS[#DELAYS+1] = ms / 1000 end
 
   print("")
   print("pass rate from a RECEIVED ball, by how early the flip is aimed")
@@ -143,9 +148,11 @@ return function()
           math.floor(top_d * 1000)))
     local row = "             "
     for _, d in ipairs(DELAYS) do
-      if d * 1000 % 10 == 0 then row = row .. ("%4.0f"):format(100 * curve[d]) end
+      if math.abs(d * 1000) % 20 == 0 then
+        row = row .. ("%4.0f"):format(100 * curve[d])
+      end
     end
-    print(row .. "   (% pass, at 10,20,30..ms before contact)")
+    print(row .. "   (% pass at lead -60,-40,-20,0,20,40,60,80ms)")
     print(("             half-peak window: %dms  (a 60fps frame is 17ms)")
       :format(math.floor(best[id].window * 1000)))
   end
