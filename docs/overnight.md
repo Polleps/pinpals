@@ -221,6 +221,7 @@ cool things to add or improve, document them, add them here.
 - **Gamepad disconnect bug** · DONE. Unplugging one pad renumbered the other player.
 - **Held device key lost on role swap** · DONE (f1407a4). A released gate stayed open.
 - **Tests for the night's validators** · DONE. They had caught real bugs and had no tests.
+- **End-to-end verification** · DONE (cd6e7a0). The real frame loop, and a 60-min soak.
 - **Session structure (§13.2)** · NOT ATTEMPTED, deliberately. There is a score and
   nothing that ends. It is the biggest open question left, and it is also the one where
   a wrong guess costs the most: team lives, run length and whether there is an ending
@@ -927,5 +928,28 @@ mid-flight last night); and a target with no bank.
 
 Plus a cry-wolf case per the existing section — the shipped bank must *not* be flagged,
 or the check is too strict to author a bank with at all.
+
+### Iteration 25 — what has actually been run · `cd6e7a0`
+
+"Tested" has meant several different things tonight, and the distinctions matter, so
+`prototype.md` gained a §5a listing what has been exercised and how — the gate, the real
+frame loop, the visual check, a 60-minute soak, replay determinism, frame cost — with a
+row of its own for the fact that **none of it has been played by a person**.
+
+The real frame loop is now among them. `--shot` never calls `love.update`, so
+`match:advance`, `audio.update` and `record.update` had never run together until now.
+Six seconds of `love .` runs clean, prints its summary on the way out, writes the log.
+
+The 60-minute soak: **864,000 ticks, every per-tick invariant held**, no drift in the
+feed cap or the meters.
+
+It surfaced one number worth watching, which I've recorded rather than tuned:
+
+> **156 rescues against 25 drains — an 86% save rate.**
+
+Random play mashes the post far more than a person would, so that isn't a verdict on §8.
+But if a human session lands anywhere near it, the purgatory window is too generous and
+losing the ball has stopped meaning anything. The session log counts rescues, so one
+playtest settles it — better than me guessing at a constant at 3am.
 
 *(iterations append here)*
