@@ -38,6 +38,7 @@ tools, not gates — run one with `PINPALS_SUITE=tests.probe_reach love . --test
 | `timing`, `approach`, `speed_window` | how hard is it to receive a pass, and why |
 | `post`, `impulses`, `scoring` | device trade-offs, contact thresholds |
 | `soak`, `perf` | everything at once for 10 minutes; frame cost |
+| `audio` | the synthesized kit is audible, unclipped and centred (`luajit tests/probe_audio.lua`) |
 
 Four things this project has learned the hard way, all of which cost a wrong conclusion
 first:

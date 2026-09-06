@@ -253,6 +253,10 @@ They are choices to react to, not decisions.
   far more than a person would, so that number is not a verdict; but if a human session
   also lands anywhere near it, §8's purgatory window is too generous and the drain has
   stopped meaning anything. The session log reports rescues, so one playtest settles it.
+- **Nobody has heard the audio.** It is verifiably not silent and not clipping, but
+  its peaks sit around half scale — deliberate headroom for overlapping voices, and
+  also a kit that may simply be too quiet. Raise the `gain` values in `app/audio.lua`'s
+  KIT if so, not the playback volumes.
 - **None of the overnight work has been played.** Every number in this document
   comes from a headless probe. They say the systems function; they cannot say the
   game is fun.
@@ -280,6 +284,7 @@ are measurement tools (see `CLAUDE.md`).
 | 60-minute soak with per-tick invariants | 864,000 ticks, all held |
 | Replay determinism (§5.1) | two runs of one intent stream agree, checksummed |
 | Frame cost (§3) | 26µs per 60fps frame, 0.2% of budget |
+| The audio kit | 13 voices, none silent, none clipping, all centred |
 
 What has **not** been run is a person. Every number in this document came from a probe.
 
