@@ -19,7 +19,12 @@ M.PAD = {
   a = "operator_gate", b = "operator_paddle",
 }
 
-M.joysticks = {}   -- [1] and [2], in connection order
+-- Slot 1 is player 1 and slot 2 is player 2, permanently. Holes are expected:
+-- a disconnected pad empties its slot rather than closing the gap, so `#` is
+-- never used on this table (it is undefined on a table with holes anyway).
+M.joysticks = {}
+
+local MAX_PADS = 2
 
 ---@param key string
 ---@param pressed boolean
@@ -37,20 +42,40 @@ end
 function M.from_pad(joystick, button, pressed, tick)
   local action = M.PAD[button]
   if not action then return nil end
-  for player, js in pairs(M.joysticks) do
-    if js == joystick then return intents.new(player, action, pressed, tick) end
+  for player = 1, MAX_PADS do
+    if M.joysticks[player] == joystick then
+      return intents.new(player, action, pressed, tick)
+    end
   end
   return nil
 end
 
+--- Take the lowest free slot. A pad reconnecting after a dropout gets its
+--- number back rather than queueing behind the player who stayed connected.
 function M.attach(joystick)
-  if #M.joysticks < 2 then M.joysticks[#M.joysticks + 1] = joystick end
+  for player = 1, MAX_PADS do
+    if M.joysticks[player] == nil then
+      M.joysticks[player] = joystick
+      return player
+    end
+  end
+  return nil                      -- a third pad is ignored
 end
 
+--- Empty the slot; do NOT close the gap.
+---
+--- This used to be a table.remove, which shifted player 2's pad into slot 1.
+--- Unplugging player 1 -- a dead battery, a kicked cable -- silently handed
+--- player 2 the other player's board: their flippers, their devices, the
+--- wrong half of a two-player game, with nothing on screen to say so.
 function M.detach(joystick)
-  for i, js in ipairs(M.joysticks) do
-    if js == joystick then table.remove(M.joysticks, i) return end
+  for player = 1, MAX_PADS do
+    if M.joysticks[player] == joystick then
+      M.joysticks[player] = nil
+      return player
+    end
   end
+  return nil
 end
 
 --- Human-readable bindings, for the on-screen legend.
