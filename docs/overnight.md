@@ -225,6 +225,8 @@ cool things to add or improve, document them, add them here.
 - **End-to-end verification** · DONE (cd6e7a0). The real frame loop, and a 60-min soak.
 - **Audio kit verified** · DONE (df7ca98, ca3a52c). Nobody had heard it; now it is at
   least provably not silence.
+- **Every commit verified green** · DONE (b29c692). 53 of 54; the one red is the one
+  already fixed.
 - **Session structure (§13.2)** · NOT ATTEMPTED, deliberately. There is a score and
   nothing that ends. It is the biggest open question left, and it is also the one where
   a wrong guess costs the most: team lives, run length and whether there is an ending
@@ -983,5 +985,26 @@ Worse was *how* it got committed. I'd been running `make check 2>&1 | tail -2 &&
 commit` all night, and **a pipe masks make's exit status** — the `&&` sees `tail`
 succeed. Every earlier commit happened to be green and I read each output, but the guard
 was never actually guarding. Fixed at the source, and `set -o pipefail` from here.
+
+### Iteration 27 — are the commit messages telling the truth? · `b29c692`
+
+Last iteration's discovery — that `make check | tail && git commit` tests whether `tail`
+succeeded — made every "all gates passed" line on this branch an assertion rather than a
+fact. So I checked all of them, running the full gate at each commit in a detached
+worktree:
+
+```
+53 green, 1 red across main..HEAD
+```
+
+The one red is `df7ca98`, already identified and fixed in the commit immediately after
+it. **Every other claim on the branch holds.**
+
+Kept as `scripts/verify_history.sh`, because this project is worked on unattended and
+the failure it catches is specifically the kind an agent produces and then reports as
+success. Exits non-zero if anything is red.
+
+Also refreshed the summary at the top of this file, which still quoted test counts from
+ten iterations ago — 97 core and 38 sim now, against 29 and 25 at the start of the night.
 
 *(iterations append here)*
