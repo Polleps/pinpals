@@ -107,6 +107,16 @@ local function collect(def)
   return out
 end
 
+--- Board definitions are immutable once loaded and a reload replaces the whole
+--- table, so identity is a sound cache key and the overlay stops allocating
+--- fifty tables a frame for a list that cannot have changed.
+local cached_def, cached_pts
+
+local function points_for(def)
+  if cached_def ~= def then cached_def, cached_pts = def, collect(def) end
+  return cached_pts
+end
+
 --- The rectangles whose extent is worth outlining, since only their centres
 --- are labelled.
 local function rects_of(def)
@@ -204,6 +214,22 @@ local function drain_label(def, view, font)
                        view.x, y - 11, def.size.w * view.s - 3, "right")
 end
 
+--- Above-right of the dot by preference, then below it, then the same two on
+--- the left -- which is also what keeps a label on screen at the right-hand
+--- board's outer wall. Four tries rather than one because the places that lose
+--- the race are the dense ones, and those are the places you are looking at:
+--- a flipper pivot with a wall end 7px away had no label at all before this.
+local OFFSETS = { { 5, -12 }, { 5, 2 }, { -5, -12 }, { -5, 2 } }
+
+local function place_label(taken, px, py, w, wmax)
+  for _, o in ipairs(OFFSETS) do
+    local lx = (o[1] > 0) and (px + o[1]) or (px + o[1] - w)
+    local ly = py + o[2]
+    if lx >= 0 and lx + w <= wmax and claim(taken, lx, ly, w) then return lx, ly end
+  end
+  return nil
+end
+
 local DOT = { vertex = 2.0, centre = 2.6, parked = 1.6 }
 
 local function draw_points(pts, view, font, taken, wmax)
@@ -216,11 +242,8 @@ local function draw_points(pts, view, font, taken, wmax)
 
     local text = coords(p.x, p.y)
     local w = font:getWidth(text)
-    -- Up and to the right of the dot, flipped when that would run off the
-    -- window -- which the right-hand board's outer wall does at every scale.
-    local lx = (px + 5 + w > wmax) and (px - 5 - w) or (px + 5)
-    local ly = py - 12
-    if claim(taken, lx, ly, w) then
+    local lx, ly = place_label(taken, px, py, w, wmax)
+    if lx then
       love.graphics.setColor(0.02, 0.02, 0.03, 0.72)
       love.graphics.rectangle("fill", lx - 2, ly, w + 4, 11, 2)
       love.graphics.setColor(INK[1], INK[2], INK[3], 0.95 * faded)
@@ -289,7 +312,7 @@ end
 --- @param my    number|nil
 --- @param wmax  number window width, for keeping labels on screen
 function M.draw(def, view, fonts, mx, my, wmax)
-  local pts = collect(def)
+  local pts = points_for(def)
   scrim(def, view)
   grid(def, view, fonts.tiny)
   outlines(def, view)
