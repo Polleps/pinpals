@@ -45,12 +45,13 @@ local BASE = {
   pass   = C.SCORE_PASS,
   bumper = C.SCORE_BUMPER,
   sling  = C.SCORE_SLING,
+  guard  = C.SCORE_GUARD,
   target = C.SCORE_TARGET,
   bank   = C.SCORE_BANK,
 }
 
 --- What one scoring event is worth right now.
----@param kind "pass"|"bumper"|"sling"|"target"|"bank"
+---@param kind "pass"|"bumper"|"sling"|"guard"|"target"|"bank"
 ---@param relay integer
 ---@param boost? number cross-board multiplier on top of relay heat (§7)
 ---@return integer
@@ -69,7 +70,7 @@ end
 --- makes `best_rally` the number that actually answers §14: how good was the
 --- best thing these two players managed together?
 ---@param stats table
----@param kind "pass"|"bumper"|"sling"|"target"|"bank"
+---@param kind "pass"|"bumper"|"sling"|"guard"|"target"|"bank"
 ---@return integer awarded
 ---@param boost? number
 function M.award(stats, kind, boost)

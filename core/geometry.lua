@@ -40,6 +40,34 @@ function M.rect_corners(t)
   return out
 end
 
+--- The guard bar's rectangle at one of its two homes, in the shape
+--- rect_corners wants. Exported for the same reason rect_corners is: sim/
+--- builds a fixture from it, this module checks its clearances and app/ draws
+--- it, and three copies of "where is the bar, exactly" is three chances for
+--- the picture to disagree with the physics.
+---@param g table one `guards` entry
+---@param where "up"|"down"
+---@return table rect with x, y, w, h, angle
+function M.guard_rect(g, where)
+  local at = g[where]
+  return { x = at.x, y = at.y, w = g.w, h = g.h, angle = g.angle or 0 }
+end
+
+--- The two ends of the guard bar's centreline, outer end first. "Outer" is
+--- the end against the shell, which is the low-x end on the left of the board
+--- and the high-x end on the right.
+---@param g table one `guards` entry
+---@param where "up"|"down"
+---@return number ox, number oy, number ix, number iy
+function M.guard_ends(g, where)
+  local at, a = g[where], g.angle or 0
+  local hx, hy = math.cos(a) * g.w / 2, math.sin(a) * g.w / 2
+  if g.side == "left" then
+    return at.x - hx, at.y - hy, at.x + hx, at.y + hy
+  end
+  return at.x + hx, at.y + hy, at.x - hx, at.y - hy
+end
+
 --- Distance from a point to a segment, and the closest point on it.
 local function point_seg(px, py, ax, ay, bx, by)
   local dx, dy = bx - ax, by - ay
@@ -427,6 +455,84 @@ local function check_devices(board, segs, out)
 end
 
 ---------------------------------------------------------------------------
+-- 5. Outlane guards
+---------------------------------------------------------------------------
+
+--- The guard is a barrier across the mouth of an outlane, and three separate
+--- things about it are easy to author wrong in ways that read fine on screen.
+---
+--- Deliberately NOT run through check_wedges: the guard is supposed to
+--- overlap the shell and the lane divider, which is the exact condition that
+--- check flags. It gets its own rules instead.
+local function check_guards(board, segs, out)
+  local function nearest_wall(x, y)
+    local best, poly = math.huge, nil
+    for _, s in ipairs(segs) do
+      local d = (point_seg(x, y, s.ax, s.ay, s.bx, s.by))
+      if d < best then best, poly = d, s.poly end
+    end
+    return best, poly
+  end
+
+  for _, g in ipairs(board.guards or {}) do
+    local at = ("guard %s"):format(tostring(g.side))
+
+    -- 1. Deployed, both ends have to reach what they are sealing against. An
+    --    end that stops a ball's width short is an end the ball goes around,
+    --    and the guard then reads as protection while protecting nothing.
+    local ox, oy, ix, iy = M.guard_ends(g, "up")
+    local anchor = {}
+    for _, en in ipairs({ { "outer", ox, oy }, { "inner", ix, iy } }) do
+      local d, poly = nearest_wall(en[2], en[3])
+      anchor[en[1]] = poly
+      if d >= BALL_D then
+        out[#out+1] = {
+          kind = "guard-leaks", x = en[2], y = en[3],
+          msg = ("%s: its %s end stops %.1fpx from the nearest wall; the ball is %.1fpx wide")
+                :format(at, en[1], d, BALL_D),
+        }
+      end
+    end
+    -- Both ends near the SAME chain is a bar lying along one wall rather than
+    -- across a lane: every clearance is tiny and the lane beside it is wide
+    -- open. It is the failure mode the distance test above cannot see.
+    if anchor.outer and anchor.outer == anchor.inner then
+      out[#out+1] = {
+        kind = "guard-leaks", x = g.up.x, y = g.up.y,
+        msg = ("%s: both ends sit against wall %d, so it spans no lane")
+              :format(at, anchor.outer),
+      }
+    end
+
+    -- 2. The bar has to slope INWARD-AND-DOWN. Both the kick off its face and
+    --    the roll of a ball too slow for Box2D to bounce at all follow the
+    --    slope, so the wrong sign sends a dying ball outward into a pocket
+    --    against the shell instead of inward onto the lane divider.
+    if iy <= oy then
+      out[#out+1] = {
+        kind = "guard-tilt", x = ix, y = iy,
+        msg = ("%s: its inner end (y=%.0f) is not below its outer end (y=%.0f); a slow ball pockets outward")
+              :format(at, iy, oy),
+      }
+    end
+
+    -- 3. Retracted, it has to be genuinely gone. A guard still poking above
+    --    the drain line is a guard that never stops guarding, which is the
+    --    §6.2 failure the post was already caught committing.
+    local top = math.huge
+    local c = M.rect_corners(M.guard_rect(g, "down"))
+    for i = 2, #c, 2 do top = math.min(top, c[i]) end
+    if top <= board.drain_y then
+      out[#out+1] = {
+        kind = "guard-stuck-out", x = g.down.x, y = g.down.y,
+        msg = ("%s: retracted it still reaches y=%.0f, above the drain line at %.0f")
+              :format(at, top, board.drain_y),
+      }
+    end
+  end
+end
+
+---------------------------------------------------------------------------
 
 --- Check one board's geometry.
 ---@param board table a board definition that has already passed validate.board
@@ -440,10 +546,18 @@ function M.check(board)
   local arc_segs = { }
   for _, sg in ipairs(segs) do arc_segs[#arc_segs+1] = sg end
   for _, sg in ipairs(solid_segments(solids_of(board))) do arc_segs[#arc_segs+1] = sg end
+  -- A deployed guard is solid too, so a badly placed one has to be caught
+  -- jamming a flipper the same way a slingshot is.
+  for _, g in ipairs(board.guards or {}) do
+    local sol = { label = "guard " .. tostring(g.side), x = g.up.x, y = g.up.y,
+                  c = M.rect_corners(M.guard_rect(g, "up")) }
+    for _, sg in ipairs(solid_segments({ sol })) do arc_segs[#arc_segs+1] = sg end
+  end
   check_bowls(board, segs, out)
   check_flipper_arcs(board, arc_segs, out)
   check_wedges(board, segs, out)
   check_devices(board, segs, out)
+  check_guards(board, segs, out)
   table.sort(out, function(a, b)
     if a.kind ~= b.kind then return a.kind < b.kind end
     return (a.x + a.y * 1e-3) < (b.x + b.y * 1e-3)

@@ -167,6 +167,47 @@ function M.board(b)
     e[#e+1] = "devices: prototype expects one gate and one paddle"
   end
 
+  -- §6.2 The outlane guards. Exactly two, one per side, and a kick that
+  -- actually kicks -- the same rule slingshots get, for the same reason: a
+  -- barrier with restitution <= 1 is a wall shaped like a bumper, which reads
+  -- fine on screen and silently hands the ball back to the drain it just
+  -- saved it from.
+  if b.guards ~= nil then
+    local g = b.guards
+    if type(g) ~= "table" then
+      e[#e+1] = "guards: expected a table"
+    else
+      if g.start ~= "left" and g.start ~= "right" then
+        e[#e+1] = "guards.start: expected 'left' or 'right'"
+      end
+      if g.kick ~= nil and not isnum(g.kick) then
+        e[#e+1] = "guards.kick: expected a number"
+      elseif (g.kick or 1.30) <= 1.0 then
+        e[#e+1] = "guards.kick: must exceed 1.0 or it is a wall, not a bumper"
+      end
+      if #g ~= 2 then
+        e[#e+1] = "guards: expected exactly 2, one per side"
+      end
+      local gsides = {}
+      for i, gd in ipairs(g) do
+        local at = ("guards[%d]"):format(i)
+        if gd.side ~= "left" and gd.side ~= "right" then
+          e[#e+1] = at .. ".side: expected 'left' or 'right'"
+        elseif gsides[gd.side] then
+          e[#e+1] = at .. ": duplicate " .. gd.side .. " guard"
+        else
+          gsides[gd.side] = true
+        end
+        vec(e, at .. ".up", gd.up)
+        vec(e, at .. ".down", gd.down)
+        if not (isnum(gd.w) and isnum(gd.h)) then e[#e+1] = at .. ": expected w, h" end
+        if gd.angle ~= nil and not isnum(gd.angle) then
+          e[#e+1] = at .. ".angle: expected a number"
+        end
+      end
+    end
+  end
+
   -- The link (§5). One tube out, one arrival point in.
   if type(b.tube) ~= "table" then
     e[#e+1] = "tube: missing"

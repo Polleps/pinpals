@@ -42,6 +42,7 @@ tools, not gates — run one with `PINPALS_SUITE=tests.probe_reach love . --test
 | `identity` | ball life, drain rate and points/s per board (§13.1) |
 | `timing`, `approach`, `speed_window` | how hard is it to receive a pass, and why |
 | `post`, `impulses`, `scoring` | device trade-offs, contact thresholds |
+| `guard` | does the outlane guard save that lane, and what does the side cost |
 | `where` | where a falling ball crosses a line, and what an arrival does |
 | `ramp` | mouth height vs funnel width vs channel width, swept together |
 | `soak`, `perf` | everything at once for 10 minutes; frame cost |

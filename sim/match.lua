@@ -36,7 +36,7 @@ end
 
 function Match:_snapshot(id)
   local b = self.boards[id]
-  local snap = { flippers = {}, devices = {} }
+  local snap = { flippers = {}, devices = {}, guards = {} }
   local x, y = b:ball_pos()
   if x then snap.ball = { x = x, y = y } end
   for side, f in pairs(b.flippers) do snap.flippers[side] = f.body:getAngle() end
@@ -47,6 +47,10 @@ function Match:_snapshot(id)
       local dx, dy = dev.body:getPosition()
       snap.devices[did] = { x = dx, y = dy, p = b:device_progress(did) }
     end
+  end
+  for side, g in pairs(b.guards) do
+    local gx, gy = g.body:getPosition()
+    snap.guards[side] = { x = gx, y = gy, p = b:guard_progress(side) }
   end
   return snap
 end

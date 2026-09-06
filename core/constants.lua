@@ -73,6 +73,10 @@ C.SCORE_BUMPER   = 50          -- chaos: cheap, frequent, not aimed
 C.SCORE_SLING    = 25
 C.SCORE_TARGET   = 250         -- precision: you meant to hit this
 C.SCORE_BANK     = 2500        -- clearing a whole bank, before the multiplier
+-- The outlane guard (§6.2). Worth more than a slingshot and less than a
+-- bumper: nobody aimed the ball into it, but somebody decided in advance that
+-- this was the side to protect, and that decision is the thing being paid for.
+C.SCORE_GUARD    = 100
 
 -- §7 Cross-board state: completing something on A arms something on B.
 -- Foundry's bumpers charge Glasshouse's vault; clearing the vault lights
@@ -133,5 +137,20 @@ C.GATE_THICK     = 9           -- gate arm thickness; core/geometry.lua needs it
 -- Travel times are deliberately long enough to read across a room.
 C.GATE_TRAVEL    = 0.30
 C.PADDLE_TRAVEL  = 0.26
+-- §6.2 The outlane guard: one barrier that seals the left outlane or the
+-- right one, never both, moved by the operator. Long enough to be a real cost
+-- -- for these 300ms NEITHER lane is sealed, so switching sides in a panic is
+-- how the ball goes down the side you just left.
+C.GUARD_TRAVEL   = 0.30
+-- ...and it is good for exactly one save, then it drops out of play for this
+-- long. §6.2's OPEN question asked whether operator actions should cost a
+-- resource and proposed per-device cooldowns; this is that answer, on the one
+-- device that was otherwise free.
+--
+-- Read against a measured ball life of 5-15s, thirty seconds is deliberately
+-- longer than a ball. The guard is not a lane you close, it is one save you
+-- spend, and choosing WHICH side to spend it on is the whole decision. See
+-- tests/probe_guard.lua for what it is worth at this number.
+C.GUARD_COOLDOWN = 30
 
 return C

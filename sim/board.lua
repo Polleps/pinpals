@@ -138,6 +138,38 @@ local function build_devices(self, def)
   end
 end
 
+--- §6.2 The outlane guards. One bar per side, and only ever one of them
+--- deployed: WHICH one is a rule, so it lives in core/ state, and this file
+--- only drives the two bodies toward whatever core/ decided.
+---
+--- Kinematic and velocity-driven like the post, energetic like a bumper. The
+--- kick is not the impulse §6.1 forbids -- the operator moves a bar, and the
+--- bar is either across the lane or it is not, which is exactly the
+--- persistent state that rule asks for. What the ball does on contact is the
+--- table's business, the same way a slingshot's is.
+---
+--- Built at the home `start` names rather than always retracted, so a fresh
+--- board is not spending its first 300ms sliding a guard into place while the
+--- ball is already loose.
+local function build_guards(self, def)
+  local spec_set = def.guards
+  if not spec_set then return end
+  for _, g in ipairs(spec_set) do
+    local home = (g.side == spec_set.start) and g.up or g.down
+    local body = love.physics.newBody(self.world, home.x, home.y, "kinematic")
+    local shape = love.physics.newRectangleShape(0, 0, g.w, g.h, g.angle or 0)
+    local f = love.physics.newFixture(body, shape, 1)
+    f:setRestitution(spec_set.kick or 1.30)
+    f:setFriction(0.04)
+    ud(f, "guard", g.side)
+    local dx, dy = g.up.x - g.down.x, g.up.y - g.down.y
+    self.guards[g.side] = {
+      def = g, body = body,
+      rate = math.sqrt(dx * dx + dy * dy) / C.GUARD_TRAVEL,
+    }
+  end
+end
+
 ---@param def table validated board definition
 ---@return table board
 function Board.new(def)
@@ -148,6 +180,7 @@ function Board.new(def)
   self.ground   = love.physics.newBody(self.world, 0, 0, "static")
   self.flippers = {}
   self.devices  = {}
+  self.guards   = {}
   self.ball     = nil
   self.events   = {}
 
@@ -157,6 +190,7 @@ function Board.new(def)
   build_targets(self, def)
   build_mouth(self, def)
   build_devices(self, def)
+  build_guards(self, def)
   for _, spec in ipairs(def.flippers) do build_flipper(self, def, spec) end
 
   self.world:setCallbacks(
@@ -262,6 +296,18 @@ function Board:_begin(fa, fb, _)
       x = (c[1] + c[3] + c[5]) / 3, y = (c[2] + c[4] + c[6]) / 3,
     }
 
+  elseif other.kind == "guard" then
+    -- A save, and a scoring one: the operator picked this side in advance and
+    -- the ball found it. It deliberately does NOT feed the §7 cross-board
+    -- links, for the same reason the slingshots do not -- a charge that
+    -- arrives because you were standing in the right place is a charge that
+    -- stops being something you went and did.
+    local g = self.guards[other.id]
+    local gx, gy = g.body:getPosition()
+    self.events[#self.events+1] = {
+      kind = "guard", board = self.id, side = other.id, x = gx, y = gy,
+    }
+
   elseif other.kind == "target" then
     local t = self.def.targets[other.id]
     self.events[#self.events+1] = {
@@ -310,6 +356,23 @@ end
 --- Move a kinematic device toward its commanded state. Velocity-driven, never
 --- teleported, so Box2D sees the motion and the ball gets a real contact
 --- response -- which is also what makes §6.1's "persistent state" readable.
+--- Slide a kinematic body toward a point at a fixed speed, arriving exactly.
+--- Velocity-driven and never teleported, so Box2D sees the motion and a ball
+--- in the way gets a real contact response.
+local function move_body_to(body, tx, ty, rate, dt)
+  local cx, cy = body:getPosition()
+  local dx, dy = tx - cx, ty - cy
+  local dist   = math.sqrt(dx * dx + dy * dy)
+  if dist < 1e-3 then
+    body:setLinearVelocity(0, 0)
+    body:setPosition(tx, ty)
+  else
+    local step = rate * dt
+    local v    = (dist <= step) and (dist / dt) or rate
+    body:setLinearVelocity(dx / dist * v, dy / dist * v)
+  end
+end
+
 local function drive_device(dev, commanded, dt)
   if dev.kind == "gate" then
     local d      = dev.def
@@ -328,19 +391,8 @@ local function drive_device(dev, commanded, dt)
       end
     end
   else
-    local d      = dev.def
-    local target = commanded and d.up or d.down
-    local cx, cy = dev.body:getPosition()
-    local dx, dy = target.x - cx, target.y - cy
-    local dist   = math.sqrt(dx * dx + dy * dy)
-    if dist < 1e-3 then
-      dev.body:setLinearVelocity(0, 0)
-      dev.body:setPosition(target.x, target.y)
-    else
-      local step = dev.rate * dt
-      local v    = (dist <= step) and (dist / dt) or dev.rate
-      dev.body:setLinearVelocity(dx / dist * v, dy / dist * v)
-    end
+    local target = commanded and dev.def.up or dev.def.down
+    move_body_to(dev.body, target.x, target.y, dev.rate, dt)
   end
 end
 
@@ -357,6 +409,19 @@ function Board:step(bstate, has_ball)
   end
   for id, dev in pairs(self.devices) do
     drive_device(dev, bstate.devices[id].commanded, dt)
+  end
+  -- Both guards travel on every switch: one leaves as the other arrives, so
+  -- for GUARD_TRAVEL seconds neither lane is sealed. That gap is the trade
+  -- (§6.2) and it is why the bars move rather than teleporting.
+  --
+  -- A guard on cooldown is simply a guard with no deployed side: it has been
+  -- spent, so both bars go home and both outlanes are live until it recharges.
+  -- Which side core/ has SELECTED still matters while it is gone -- that is
+  -- where it comes back -- but nothing here is across a lane.
+  local armed = (bstate.guard_cooldown or 0) <= 0
+  for side, g in pairs(self.guards) do
+    local home = (armed and bstate.guard == side) and g.def.up or g.def.down
+    move_body_to(g.body, home.x, home.y, g.rate, dt)
   end
 
   self.world:update(dt)
@@ -376,6 +441,20 @@ function Board:step(bstate, has_ball)
   end
 
   return self.events
+end
+
+--- Guard travel as 0..1, for the renderer and for tests. 0 = retracted below
+--- the drain line, 1 = across the mouth of its outlane.
+---@param side "left"|"right"
+---@return number
+function Board:guard_progress(side)
+  local g = self.guards[side]
+  if not g then return 0 end
+  local d = g.def
+  local span = math.sqrt((d.up.x - d.down.x)^2 + (d.up.y - d.down.y)^2)
+  if span == 0 then return 0 end
+  local x, y = g.body:getPosition()
+  return math.sqrt((x - d.down.x)^2 + (y - d.down.y)^2) / span
 end
 
 --- Device travel as 0..1, for the renderer and for tests. 0 = closed/down.

@@ -14,8 +14,12 @@ return function(H)
   local boards = require("data.tables.init").load()
 
   --- A core-shaped command block, so sim tests don't need core/state.
-  local function cmd(gate, post, left, right)
-    return { flippers = { left = left or false, right = right or false },
+  --- `guard` is nil by default, which retracts both outlane guards: the older
+  --- measurements in this file and in every probe were taken on a board with
+  --- no guards, and silently deploying one would move all of them.
+  local function cmd(gate, post, left, right, guard, cooldown)
+    return { guard = guard, guard_cooldown = cooldown or 0,
+             flippers = { left = left or false, right = right or false },
              devices  = { gate = { commanded = gate or false },
                           post = { commanded = post or false } } }
   end
@@ -38,6 +42,111 @@ return function(H)
         A.equal(64, love.physics.getMeter(), "world scale must come from constants (§4.2)")
       end)
     end
+  end)
+
+  --- §6.2 The outlane guard. core/geometry.lua already checks that the bar
+  --- spans its lane and parks clear of the drain; these are the claims only
+  --- the physics can settle.
+  describe("the outlane guard", function()
+    --- Drop a ball into one outlane mouth and report what became of it.
+    ---
+    --- Three outcomes, not two. "Did not drain" is not a save: a ball still
+    --- sitting in the lane when the clock runs out has been PARKED, which is
+    --- exactly what a bar placed deep inside a 29px shaft produces, and it
+    --- would pass a test that only asked about draining.
+    ---
+    --- The run stops the moment the ball is back on the playfield, because
+    --- what it does next is the board's business and not the guard's -- an
+    --- unattended ball drains down the middle within a couple of seconds and
+    --- would otherwise be charged to the device.
+    local function drop(def, side, guard, seconds, cooldown)
+      local g
+      for _, spec in ipairs(def.guards) do if spec.side == side then g = spec end end
+      local b = Board.new(def)
+      local c = cmd(false, false, false, false, guard, cooldown)
+      -- Let both bars finish travelling first, so this measures the guard and
+      -- not the guard arriving.
+      run(b, C.GUARD_TRAVEL * 2, c)
+      b:spawn(g.up.x, g.up.y - 40, 0, 120)
+      local evs, outcome = {}, nil
+      for _ = 1, math.floor(seconds * C.TICK_HZ) do
+        for _, ev in ipairs(b:step(c, true)) do
+          if ev.kind == "drain" then outcome = "drained" end
+          if ev.kind == "guard" then evs[#evs+1] = ev end
+        end
+        if outcome then break end
+        local x, y = b:ball_pos()
+        local clear = (side == "left") and (x > g.up.x + 40) or (x < g.up.x - 40)
+        if y < g.up.y - 60 or clear then outcome = "escaped" break end
+      end
+      b:despawn()
+      return { outcome = outcome or "parked", events = evs }
+    end
+
+    for _, id in ipairs({ "a", "b" }) do
+      for _, side in ipairs({ "left", "right" }) do
+        it(("%s: the %s guard turns that outlane back"):format(id, side), function()
+          local r = drop(boards[id], side, side, 4)
+          A.equal("escaped", r.outcome,
+                  "a guarded outlane must put the ball back on the playfield")
+          A.truthy(r.events[1], "the ball went down the lane and never met the bar")
+          A.equal(side, r.events[1].side)
+        end)
+
+        it(("%s: guarding %s leaves the other outlane open"):format(id, side), function()
+          local other = (side == "left") and "right" or "left"
+          local r = drop(boards[id], side, other, 4)
+          A.equal("drained", r.outcome,
+                  "guarding one side must not protect the other (§6.2)")
+        end)
+      end
+    end
+
+    for _, id in ipairs({ "a", "b" }) do
+      it(("%s: a spent guard is not in the lane at all"):format(id), function()
+        -- §6.2's cooldown, in the physics. core/ stops SCORING a spent guard;
+        -- this is the half that has to stop STOPPING the ball, or the device
+        -- would keep saving for free and the cooldown would be a scoreboard
+        -- rule rather than a cost.
+        local r = drop(boards[id], "left", "left", 4, C.GUARD_COOLDOWN)
+        A.equal("drained", r.outcome, "a spent guard still guarded")
+        A.falsy(r.events[1], "a spent guard was still reporting contacts")
+      end)
+    end
+
+    it("only ever has one bar deployed", function()
+      local b = Board.new(boards.a)
+      run(b, C.GUARD_TRAVEL * 2, cmd(false, false, false, false, "left"))
+      A.near(1, b:guard_progress("left"), 0.02)
+      A.near(0, b:guard_progress("right"), 0.02)
+      -- And switching moves both, which is what leaves the window where
+      -- neither lane is sealed.
+      run(b, C.GUARD_TRAVEL * 2, cmd(false, false, false, false, "right"))
+      A.near(0, b:guard_progress("left"), 0.02)
+      A.near(1, b:guard_progress("right"), 0.02)
+    end)
+
+    it("comes back on the side chosen while it was spent", function()
+      local b = Board.new(boards.a)
+      -- Spent, and the operator switches to the right lane while it is gone.
+      run(b, C.GUARD_TRAVEL * 2, cmd(false, false, false, false, "right", 12))
+      A.near(0, b:guard_progress("left"), 0.02)
+      A.near(0, b:guard_progress("right"), 0.02, "a spent guard deployed anyway")
+      run(b, C.GUARD_TRAVEL * 2, cmd(false, false, false, false, "right", 0))
+      A.near(1, b:guard_progress("right"), 0.02)
+      A.near(0, b:guard_progress("left"), 0.02)
+    end)
+
+    it("takes GUARD_TRAVEL to switch, so the swap is visible (§6.1)", function()
+      local b = Board.new(boards.a)
+      run(b, C.GUARD_TRAVEL * 2, cmd(false, false, false, false, "left"))
+      local c = cmd(false, false, false, false, "right")
+      -- Halfway through the travel neither lane is sealed. That gap is the
+      -- cost of changing your mind and it has to actually exist.
+      run(b, C.GUARD_TRAVEL * 0.5, c)
+      A.between(0.05, 0.95, b:guard_progress("left"), "the leaving bar teleported")
+      A.between(0.05, 0.95, b:guard_progress("right"), "the arriving bar teleported")
+    end)
   end)
 
   describe("tunneling (§11)", function()

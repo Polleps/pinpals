@@ -23,6 +23,11 @@
 --- gap also means a longer unguarded run down each side, so the outlanes cost
 --- it far more. That was not designed and it is worth keeping.
 ---
+--- Both rows were measured with NO outlane guard deployed, which is what
+--- tests/probe_identity.lua still does: the guard came later and every probe
+--- keeps the old default so the numbers above stay comparable. What the guard
+--- costs and saves is measured separately, in tests/probe_guard.lua.
+---
 --- Coordinates are world pixels (core/constants.lua: 64 px = 1 m), y down,
 --- origin at the board's top-left. Playfield is 448 x 960.
 ---
@@ -173,6 +178,59 @@ return {
     -- to fill its dead half is more of the thing it already is.
     { x = 312, y = 190, r = 22, restitution = 1.15 },
     { x = 376, y = 252, r = 22, restitution = 1.15 },
+  },
+
+  -- §6.2 "the wall that guards the outlane", and the answer to the outlanes
+  -- being the one way to lose the ball that nothing could stop.
+  --
+  -- ONE barrier with two possible homes. It seals the left outlane or the
+  -- right one, never both, and the OPERATOR moves it with either flipper
+  -- button -- the two controls their role otherwise leaves them nothing to do
+  -- with. So while the flipper player is busy keeping the ball alive, their
+  -- partner is choosing which side of the board is safe, out loud, and being
+  -- wrong about it in public.
+  --
+  -- It is a BUMPER, not a wall: kick > 1, so a ball that was about to be lost
+  -- is thrown back up the lane and across the playfield rather than dribbling
+  -- out of a dead end. A guard that merely stops the ball would hand it
+  -- straight back to the same drain.
+  --
+  -- And it is good for exactly ONE save per ball. The contact spends it and
+  -- the bar is gone for GUARD_COOLDOWN seconds -- longer than a ball lives,
+  -- so this is not a lane the operator closes, it is a save they decide when
+  -- to spend -- and losing the ball hands it back. Choosing where it comes
+  -- back is the only decision left to them while it recharges, which is why
+  -- the renderer draws an empty outline filling up on the lane it will
+  -- return to.
+  --
+  -- Every number below is load-bearing and core/geometry.lua checks each:
+  --
+  --   * It sits at the MOUTH of the lane, level with the divider's top
+  --     vertex, not down inside it. A bar across a 29px shaft is a shelf the
+  --     ball comes to rest on; at the mouth it is a deflector with the whole
+  --     playfield to throw the ball back into.
+  --   * It tilts INWARD-AND-DOWN -- +0.34 rad on the left, -0.34 on the right
+  --     -- so the kick and the roll agree. A fast ball is reflected up and
+  --     inward off the face; a ball too slow for Box2D to apply restitution
+  --     to at all rolls down the same slope and off the inner end onto the
+  --     lane divider, which feeds the inlane. Tilt it the other way and both
+  --     of those go outward, into a pocket against the shell.
+  --   * Both ends overlap what they meet -- the shell at x=10, the divider at
+  --     x=36 -- because a guard that leaves a ball's width of gap is a guard
+  --     the ball goes around. They are kinematic against static bodies, which
+  --     Box2D never collides, so the overlap costs nothing.
+  --   * Retracted it parks below the drain line and off the playfield, the
+  --     way the post does, and the renderer's scissor hides it there.
+  --
+  -- Both boards carry the same numbers because both bottoms are the same
+  -- shape; see board_b.lua, which points back here.
+  guards = {
+    start = "left",       -- arbitrary: the first toggle is a second into play
+    kick  = 1.30,
+    { side = "left",  angle =  0.34, w = 30, h = 11,
+      up = { x = 24,  y = 694 }, down = { x = 24,  y = 986 } },
+    { side = "right", angle = -0.34, w = 30, h = 11,
+      up = { x = 424, y = 694 }, down = { x = 424, y = 986 } },
   },
 
   -- The drain gap is 27.6px, 16px narrower than Glasshouse's, and it is the

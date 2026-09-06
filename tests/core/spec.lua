@@ -98,6 +98,173 @@ return function(H)
     end)
   end)
 
+  --- §6.2 The outlane guard: the operator's flipper buttons move it.
+  describe("the outlane guard", function()
+    local s
+    local function fresh() s = state.new(boards); s.phase = "play" end
+
+    it("starts where the board data says", function()
+      fresh()
+      A.equal(boards.a.guards.start, s.boards.a.guard)
+      A.equal(boards.b.guards.start, s.boards.b.guard)
+    end)
+
+    it("switches sides on either of the operator's flipper buttons", function()
+      fresh()
+      local was = s.boards.a.guard
+      state.apply_intent(s, intents.new(2, "flip_left", true, 0))
+      A.equal(was == "left" and "right" or "left", s.boards.a.guard)
+      state.apply_intent(s, intents.new(2, "flip_right", true, 1))
+      A.equal(was, s.boards.a.guard, "the other button must toggle too, not pick a side")
+    end)
+
+    it("does not move on the release, or a tap would flip it twice", function()
+      fresh()
+      local was = s.boards.a.guard
+      state.apply_intent(s, intents.new(2, "flip_left", true, 0))
+      state.apply_intent(s, intents.new(2, "flip_left", false, 1))
+      A.equal(was == "left" and "right" or "left", s.boards.a.guard)
+    end)
+
+    it("is not something the flipper player can touch", function()
+      fresh()
+      local was = s.boards.a.guard
+      state.apply_intent(s, intents.new(1, "flip_left", true, 0))
+      A.equal(was, s.boards.a.guard, "the flipper's buttons are flippers")
+      A.truthy(s.boards.a.flippers.left, "...and still are")
+    end)
+
+    it("acts on the board the ball is on, not the operator's own", function()
+      fresh()
+      local was_b = s.boards.b.guard
+      state.apply_intent(s, intents.new(2, "flip_left", true, 0))
+      A.equal(was_b, s.boards.b.guard, "P2 moved the guard on their own board")
+    end)
+
+    it("is preparable during transit, like every other operator control", function()
+      fresh()
+      -- Mid-pass the destination is already active, so the sender spends the
+      -- flight arranging the floor the ball is about to land on (§5).
+      s.active, s.phase = "b", "transit"
+      local was = s.boards.b.guard
+      state.apply_intent(s, intents.new(1, "flip_right", true, 0))
+      A.equal(was == "left" and "right" or "left", s.boards.b.guard)
+    end)
+
+    it("leaves no held-key residue behind (the release bug next door)", function()
+      fresh()
+      state.apply_intent(s, intents.new(2, "flip_left", true, 0))
+      A.falsy(s.held[2].flip_left, "a guard toggle is not a held device command")
+    end)
+
+    --- One save, then thirty seconds gone (§6.2's OPEN question, answered:
+    --- per-device cooldowns).
+    local function save_on(board)
+      state.consume(s, { { kind = "guard", board = board, side = s.boards[board].guard,
+                           x = 0, y = 0 } })
+    end
+
+    it("starts armed", function()
+      fresh()
+      A.equal(0, s.boards.a.guard_cooldown)
+      A.equal(0, s.boards.b.guard_cooldown)
+    end)
+
+    it("is spent by the save it makes", function()
+      fresh()
+      save_on("a")
+      A.equal(C.GUARD_COOLDOWN, s.boards.a.guard_cooldown)
+      A.truthy(s.last_award and s.last_award.kind == "guard", "the save did not score")
+      A.equal(0, s.boards.b.guard_cooldown, "the other board's guard was spent too")
+    end)
+
+    it("works ONCE: a second contact neither scores nor re-arms the timer", function()
+      fresh()
+      save_on("a")
+      -- The bar takes GUARD_TRAVEL to retract and can catch the ball again on
+      -- the way down. That is the same save.
+      for _ = 1, 12 do state.update(s) end
+      local after_first = s.boards.a.guard_cooldown
+      local banked = s.stats.score
+      save_on("a")
+      A.falsy(s.last_award, "the retracting bar scored a second time")
+      A.equal(banked, s.stats.score)
+      A.truthy(s.boards.a.guard_cooldown <= after_first,
+               "a second contact restarted the cooldown")
+    end)
+
+    it("recharges on the clock, and on the board you are not looking at", function()
+      fresh()
+      save_on("b")                      -- spent on the DORMANT board
+      A.equal("a", s.active, "this test needs board B to be the idle one")
+      local half = math.floor(C.GUARD_COOLDOWN * C.TICK_HZ / 2)
+      for _ = 1, half do state.update(s) end
+      A.between(C.GUARD_COOLDOWN * 0.45, C.GUARD_COOLDOWN * 0.55,
+                s.boards.b.guard_cooldown)
+      for _ = 1, half + 4 do state.update(s) end
+      A.equal(0, s.boards.b.guard_cooldown,
+              "a guard spent on a board you then left never came back")
+    end)
+
+    it("can still be switched sides while it is spent", function()
+      fresh()
+      save_on("a")
+      local was = s.boards.a.guard
+      state.apply_intent(s, intents.new(2, "flip_left", true, 0))
+      A.equal(was == "left" and "right" or "left", s.boards.a.guard,
+              "choosing where the next save happens is the decision that is left")
+    end)
+
+    it("comes back with the new ball, on both boards", function()
+      fresh()
+      save_on("a")
+      save_on("b")
+      A.equal(C.GUARD_COOLDOWN, s.boards.a.guard_cooldown)
+      A.equal(C.GUARD_COOLDOWN, s.boards.b.guard_cooldown)
+      -- Lose it, all the way through purgatory to a confirmed drain.
+      state.consume(s, { { kind = "drain", board = "a" } })
+      A.equal("purgatory", s.phase)
+      for _ = 1, math.ceil(C.PURGATORY_TIME * C.TICK_HZ) + 2 do state.update(s) end
+      A.equal("drain", s.phase)
+      A.equal(0, s.boards.a.guard_cooldown, "the new ball starts with no guard")
+      A.equal(0, s.boards.b.guard_cooldown, "the dormant board was left spent")
+    end)
+
+    it("does NOT come back for a rescue -- the ball was never lost", function()
+      fresh()
+      save_on("a")
+      state.consume(s, { { kind = "drain", board = "a" } })
+      -- §8: post down at the moment of the drain arms the rescue, a fresh
+      -- raise makes it.
+      s.boards.a.devices.post.commanded = false
+      state.update(s)
+      s.boards.a.devices.post.commanded = true
+      state.update(s)
+      A.equal("serve", s.phase, "this test needs the rescue to have happened")
+      A.truthy(s.boards.a.guard_cooldown > 0,
+               "a rescue handed back a save the team had already spent")
+    end)
+
+    it("survives a pass: a crossing is not a ball loss", function()
+      fresh()
+      save_on("a")
+      state.consume(s, { { kind = "tube", board = "a", speed = 900 } })
+      for _ = 1, C.TICK_HZ do state.update(s) end
+      A.equal("b", s.active)
+      A.truthy(s.boards.a.guard_cooldown > 0,
+               "passing the ball away refilled the guard behind it")
+    end)
+
+    it("is longer than a ball, which is the point and not an accident", function()
+      -- Measured ball life is 5-15s (probe_identity). With the cooldown
+      -- clearing on every ball loss, this constant's whole job is to be
+      -- longer than one ball: that is what makes it ONE save per ball rather
+      -- than a lane the operator closes and reopens at will.
+      A.truthy(C.GUARD_COOLDOWN > 15,
+               ("GUARD_COOLDOWN is %gs, inside a single ball"):format(C.GUARD_COOLDOWN))
+    end)
+  end)
+
   describe("the pass", function()
     it("hands the board over and clamps the speed it carries (§5)", function()
       local s = state.new(boards); s.phase = "play"

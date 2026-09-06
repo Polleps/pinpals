@@ -24,6 +24,10 @@
 --- cost Foundry, because a wider flipper gap also means a longer unguarded
 --- run down each side. That was not designed and it is worth keeping.
 ---
+--- Both rows predate the outlane guards and were measured with neither
+--- deployed, which is what tests/probe_identity.lua still does so the numbers
+--- stay comparable. tests/probe_guard.lua measures the guard on its own.
+---
 --- Deliberately not a mirror of A (design.md §7): the handedness is flipped so
 --- the two boards read differently at a glance, but the upper field differs in
 --- kind, not just in layout.
@@ -181,6 +185,24 @@ return {
     { x = 352, y = 480, w = 28, h = 9, angle = 0, bank = "vault" },
     { x = 56,  y = 470, w = 28, h = 9, angle = 0, bank = "gallery" },
     { x = 404, y = 480, w = 28, h = 9, angle = 0, bank = "gallery" },
+  },
+
+  -- The outlane guards. Same numbers as Foundry's, because both bottoms are
+  -- the same shape down the sides; board_a.lua says what each one is for and
+  -- why every one of them is load-bearing.
+  --
+  -- They matter more here. Glasshouse's flipper gap is 16px wider, which also
+  -- means a longer unguarded run down each side, and the outlanes cost it
+  -- nearly half its ball life when they were added (5.40s against Foundry's
+  -- 10.76s). This is the board where knowing which side your partner has
+  -- covered is worth the most.
+  guards = {
+    start = "left",
+    kick  = 1.30,
+    { side = "left",  angle =  0.34, w = 30, h = 11,
+      up = { x = 24,  y = 694 }, down = { x = 24,  y = 986 } },
+    { side = "right", angle = -0.34, w = 30, h = 11,
+      up = { x = 424, y = 694 }, down = { x = 424, y = 986 } },
   },
 
   flippers = {

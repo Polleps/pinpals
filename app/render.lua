@@ -345,6 +345,73 @@ local function draw_devices(ctx)
   end
 end
 
+--- §6.2: the outlane guard. The one on the guarded side is across the mouth
+--- of its lane and bright; the other is on its way down out of the board.
+---
+--- Drawn in the bumper's own colour family rather than the amber the gate and
+--- post use, because it does the bumper's job on contact -- and because the
+--- flipper player has to be able to read WHICH SIDE IS SAFE out of the corner
+--- of their eye, from a board they are not looking directly at.
+---
+--- While it is spent, the lane it will come back to carries an empty outline
+--- that fills as the cooldown runs down. Without it a recharging guard is
+--- invisible on the board, and the operator's only remaining decision --
+--- which side gets the next save -- would exist solely in the side panel.
+local function draw_guard_recharge(ctx)
+  local bs = ctx.bstate
+  local left = bs and (bs.guard_cooldown or 0) or 0
+  if left <= 0 or not bs.guard then return end
+  local g
+  for _, spec in ipairs(ctx.def.guards or {}) do
+    if spec.side == bs.guard then g = spec end
+  end
+  if not g then return end
+  local ready = 1 - left / C.GUARD_COOLDOWN
+  love.graphics.push()
+  love.graphics.translate(g.up.x, g.up.y)
+  love.graphics.rotate(g.angle or 0)
+  love.graphics.setColor(0.45 * ctx.dim, 0.95 * ctx.dim, 1.0 * ctx.dim, 0.16)
+  love.graphics.setLineWidth(1)
+  love.graphics.rectangle("line", -g.w / 2, -g.h / 2, g.w, g.h, 4)
+  -- Filling from the outer end inward, the direction the bar itself arrives
+  -- from, so the animation and the mechanism point the same way.
+  local sign = (g.side == "left") and -1 or 1
+  love.graphics.setColor(0.45 * ctx.dim, 0.95 * ctx.dim, 1.0 * ctx.dim, 0.30)
+  love.graphics.rectangle("fill", sign < 0 and -g.w / 2 or (g.w / 2 - g.w * ready),
+                          -g.h / 2, g.w * ready, g.h, 4)
+  love.graphics.setLineWidth(3)
+  love.graphics.pop()
+end
+
+local function draw_guards(ctx)
+  draw_guard_recharge(ctx)
+  for _, g in ipairs(ctx.def.guards or {}) do
+    local gs = ctx.snap.guards and ctx.snap.guards[g.side]
+    if gs then
+      local gp = ctx.prev and ctx.prev.guards and ctx.prev.guards[g.side]
+      local p = ilerp(gp and gp.p, gs.p, ctx.alpha) or gs.p
+      local x = ilerp(gp and gp.x, gs.x, ctx.alpha) or gs.x
+      local y = ilerp(gp and gp.y, gs.y, ctx.alpha) or gs.y
+      local pulse = fx and fx.hit_pulse(ctx.def.id, "guard", g.side) or 0
+      love.graphics.push()
+      love.graphics.translate(x, y)
+      love.graphics.rotate(g.angle or 0)
+      -- Deployed it is a lit bar; retracting it fades toward the board.
+      love.graphics.setColor(lerp(0.30, 0.45, p) * ctx.dim,
+                             lerp(0.55, 0.95, p) * ctx.dim,
+                             lerp(0.60, 1.00, p) * ctx.dim,
+                             (0.30 + 0.60 * p) + 0.40 * pulse)
+      love.graphics.rectangle("fill", -g.w / 2, -g.h / 2, g.w, g.h, 4)
+      love.graphics.setColor(0.70 * ctx.dim, 1.0 * ctx.dim, 1.0 * ctx.dim,
+                             (0.25 + 0.65 * p) + 0.35 * pulse)
+      love.graphics.setLineWidth(2 + 3 * pulse)
+      love.graphics.rectangle("line", -g.w / 2, -g.h / 2, g.w, g.h, 4)
+      love.graphics.setLineWidth(3)
+      love.graphics.pop()
+    end
+  end
+end
+
 --- The player's own hands.
 local function draw_flippers(ctx)
   love.graphics.setColor(0.92 * ctx.dim, 0.92 * ctx.dim, 0.96 * ctx.dim, 1)
@@ -425,6 +492,7 @@ local function draw_board(def, snap, prev, alpha, view, active, heat, incoming, 
   draw_targets(ctx)
   draw_link(ctx)
   draw_devices(ctx)
+  draw_guards(ctx)
   draw_flippers(ctx)
   draw_effects_and_ball(ctx)
 
@@ -556,7 +624,8 @@ local function hud_roles(x, y, legend, active, transit)
     love.graphics.setFont(fonts.small)
     love.graphics.print(flip
       and ("%s / %s"):format(L.flip_left, L.flip_right)
-      or  ("%s gate / %s post"):format(L.operator_gate, L.operator_paddle), x + 120, y + 3)
+      or  ("%s gate  %s post  %s/%s guard"):format(L.operator_gate, L.operator_paddle,
+                                                   L.flip_left, L.flip_right), x + 120, y + 3)
     love.graphics.setFont(fonts.body)
     y = y + 22
   end
@@ -608,6 +677,38 @@ local function hud_devices(state, def, snaps, x, y, active)
     love.graphics.setFont(fonts.small)
     col(1, 1, 1, 0.42)
     love.graphics.print(d.tradeoff, x, y + 19)
+    y = y + 42
+  end
+
+  -- §6.2 The outlane guard. Which side it is on is the whole readout, so it
+  -- is printed as a word rather than shown as a bar: "LEFT" and "RIGHT" are
+  -- what the two of them are going to shout at each other.
+  local ab   = state.boards[active]
+  local side = ab.guard
+  if side then
+    local cool = ab.guard_cooldown or 0
+    local gs   = snaps[active].guards[side]
+    love.graphics.setFont(fonts.body)
+    -- Spent, recharging, and armed have to be three visibly different things.
+    -- The bar is the guard's own travel while it is armed and the cooldown
+    -- filling while it is not, because those are the two waits that exist and
+    -- only one of them is ever happening.
+    if cool > 0 then
+      col(0.55, 0.95, 1.0, 0.45)
+      love.graphics.print(("GUARD %s in %.0fs"):format(side:upper(), math.ceil(cool)),
+                          x, y)
+      bar(x + 160, y + 5, 82, 8, 1 - cool / C.GUARD_COOLDOWN, 0.30, 0.55, 0.62)
+    else
+      col(0.55, 0.95, 1.0, 0.9)
+      love.graphics.print(("GUARD %s"):format(side:upper()), x, y)
+      bar(x + 92, y + 5, 150, 8, gs and gs.p or 0, 0.45, 0.95, 1.0)
+    end
+    love.graphics.setFont(fonts.small)
+    col(1, 1, 1, 0.42)
+    love.graphics.print(cool > 0
+      and "Spent. Either button picks the lane it comes back to."
+      or  "One save, then 30s gone. The other outlane is open either way.",
+      x, y + 19)
     y = y + 42
   end
   return y

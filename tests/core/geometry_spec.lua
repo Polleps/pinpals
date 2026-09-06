@@ -90,6 +90,49 @@ return function(H)
     end)
   end)
 
+  --- §6.2 The outlane guard. These are not bugs that shipped -- they are the
+  --- three ways the bar was nearly authored wrong while it was being written,
+  --- each caught by drawing the numbers out rather than by playing.
+  describe("catches the ways an outlane guard goes wrong", function()
+    it("a bar that leaves a ball's width beside it", function()
+      local b = broken(function(x) x.guards[1].up.x = 50 end)
+      A.truthy((kinds(b))["guard-leaks"], "the ball simply goes round it")
+    end)
+
+    it("a bar tilted so a dying ball rolls into the outer corner", function()
+      -- Both the kick and the roll follow the slope. With the sign flipped
+      -- the bar still stops the ball and still looks right, and a ball too
+      -- slow for Box2D to bounce settles in the corner against the shell.
+      local b = broken(function(x) x.guards[1].angle = -x.guards[1].angle end)
+      A.truthy((kinds(b))["guard-tilt"])
+    end)
+
+    it("a bar that never retracts below the drain line", function()
+      -- A guard that cannot leave is a guard on both sides at once, which is
+      -- the §6.2 failure the post was already caught committing.
+      local b = broken(function(x) x.guards[1].down.y = x.drain_y - 20 end)
+      A.truthy((kinds(b))["guard-stuck-out"])
+    end)
+
+    it("a bar lying along the shell instead of across the lane", function()
+      -- Both ends are a couple of pixels from the outer wall, so every
+      -- clearance the distance rule measures is tiny -- and the lane beside
+      -- it is 21px of open air. This is the case that rule cannot see, and
+      -- the reason the two ends have to anchor to DIFFERENT wall chains.
+      local b = broken(function(x)
+        local g = x.guards[1]
+        g.angle, g.w, g.h, g.up.x = math.pi / 2 - 0.02, 120, 4, 13
+      end)
+      local said = false
+      for _, d in ipairs(geo.check(b)) do
+        if d.kind == "guard-leaks" and d.msg:find("spans no lane", 1, true) then
+          said = true
+        end
+      end
+      A.truthy(said, "it spans no lane and nothing said so")
+    end)
+  end)
+
   describe("catches the target-bank bugs from 2026-09-06", function()
     -- Board B is the one with a bank, so these mutate it rather than A.
     local function broken_b(mutate)

@@ -43,6 +43,13 @@ return function()
       for _, b in pairs(s.boards) do
         if math.random() < 0.30 then b.devices.gate.commanded = math.random() < 0.6 end
         if math.random() < 0.25 then b.devices.post.commanded = math.random() < 0.4 end
+        -- §6.2 The outlane guard, switched often. The bar sweeps the whole
+        -- length of its lane on every change, so this is where a ball ridden
+        -- down out of play, or wedged against a moving kinematic body, would
+        -- show up over ten minutes.
+        if b.guard and math.random() < 0.15 then
+          b.guard = (math.random() < 0.5) and "left" or "right"
+        end
       end
       local act = s.boards[s.active]
       act.flippers.left  = math.random() < 0.4
@@ -67,6 +74,21 @@ return function()
     if s.stats.score < 0 or s.stats.rally_score < 0 then fail(i, "negative score") end
     if s.stats.rally_score > s.stats.score then fail(i, "rally exceeds session score") end
     if s.stats.relay > s.stats.best_relay then fail(i, "relay exceeds its own best") end
+
+    -- The guard is on exactly one side at all times: it is one value, not
+    -- two booleans, precisely so "both" and "neither" cannot be reached.
+    for id, b in pairs(s.boards) do
+      if b.guard ~= nil and b.guard ~= "left" and b.guard ~= "right" then
+        fail(i, ("%s guard is %s"):format(id, tostring(b.guard)))
+      end
+      -- And the cooldown only ever counts down, from one save's worth. A
+      -- value above the constant means something re-armed a running timer,
+      -- which is how "works once" quietly becomes "works once per contact".
+      local cool = b.guard_cooldown or 0
+      if cool < 0 or cool > C.GUARD_COOLDOWN then
+        fail(i, ("%s guard cooldown out of range: %.2f"):format(id, cool))
+      end
+    end
 
     -- Cross-board meters stay in range, and lit counters never go negative.
     for id, b in pairs(s.boards) do

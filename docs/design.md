@@ -125,6 +125,99 @@ This is what forces the talking. The operator has to announce, and the flipper h
 
 **OPEN:** Do operator actions cost a resource? Proposal for v1: per-device cooldowns, no
 shared meter. Simpler to read, and the trade-offs above already provide the restraint.
+*Answered for one device — see §6.3, which is on a cooldown and nothing else is.*
+
+### 6.3 The outlane guard, as built **PROVISIONAL (2026-09-06)**
+
+The third bullet above, built. Each board has **one** barrier across the mouth of an
+outlane, and it is on the left lane or the right lane, never both. The operator switches
+it with **either flipper button** — the two controls their role otherwise leaves them
+nothing to do with — and the swap takes `GUARD_TRAVEL` (300ms), during which *neither*
+lane is sealed.
+
+It bumps rather than blocks: restitution 1.30, tilted inward-and-down, so a ball that was
+about to be lost is thrown back across the playfield and scores `SCORE_GUARD`. A guard
+that merely stopped the ball would hand it straight back to the same drain.
+
+**It is good for one save per ball.** The contact spends it: the bar retracts and both
+outlanes are live for `GUARD_COOLDOWN` (30s) before it comes back. The cooldown is longer
+than a ball lives (5–15s) *on purpose* — that is what makes it one save and not a lane the
+operator opens and closes at will — and it **clears the moment the ball is lost**, on both
+boards, so the ball that pays for a save is the ball that spent it. Charging a save near
+the end of one ball against the start of the next two would be a cost the player who spent
+it does not pay.
+
+A **rescue** (§8) does not clear it: the ball was never lost, so it keeps the rally *and*
+keeps the guard spent. You do not get a fresh save for nearly dropping it. Neither does a
+pass — a crossing is not a ball loss, and the cooldown follows the board across the rally.
+
+This is the §6.2 OPEN question above, answered for this one device. The side stays
+switchable while it recharges, because choosing where the next save happens is the only
+decision left; the board draws an empty outline filling on that lane so the choice is
+visible before it matters.
+
+Measured (`tests/probe_guard.lua`), 40 balls dropped into each lane:
+
+```
+  lane                escaped   drained   parked   guard hits/ball
+  guarded                  40         0        0              1.00
+  unguarded                 5        34        0              0.00
+```
+
+One contact per save, no rattling, and nothing ever parks in the lane. The trade is
+real: guarding one side leaves the other at ~86% drain, and a spent guard leaves *both*
+sides at that number until it recharges.
+
+The **side is a genuine decision**, which is the part that was not designed. Whole-board
+random play, 96 balls a cell, drains/s:
+
+```
+  board       ball from      guard left   guard right   no guard
+  Foundry     the plunger        0.0755        0.0766     0.0951
+  Foundry     the tube           0.0860        0.0680     0.0761
+  Glasshouse  the plunger        0.0537        0.1619     0.1792
+  Glasshouse  the tube           0.1267        0.1142     0.1270
+```
+
+No board has a side that is right in both columns, so the operator has to know both the
+board and where the ball came in. Glasshouse's enormous plunger-column bias is mostly an
+artifact of its plunger sitting a ball's width from the left lane, which is why the two
+starts are reported separately and not averaged.
+
+**What the cooldown costs**, same runs with and without the rule. `armed` is the share of
+ball time the bar was actually in its lane:
+
+```
+  board       ball from      guard   armed   drains/s   if it never ran out
+  Foundry     the plunger     left     85%     0.0812                0.0816
+  Foundry     the plunger     right    81%     0.0770                0.0671
+  Foundry     the tube        left     87%     0.0857                0.0884
+  Foundry     the tube        right    80%     0.0858                0.0779
+  Glasshouse  the plunger     left      7%     0.1156                0.0994
+  Glasshouse  the plunger     right    93%     0.1764                0.1754
+  Glasshouse  the tube        left     89%     0.1197                0.1326
+  Glasshouse  the tube        right    90%     0.1210                0.0985
+```
+
+30s against a 5–15s ball reads like a device that is absent most of the time. Measured, it
+is armed **80–93%** of ball time under random play, because the bar is only spent when a
+ball actually goes down the lane it is standing in — uncommon — and because the loss reset
+hands it back with every new ball. It is one save you have to time, not a device that
+disappears. (Without the reset the same runs measure 61–76%, so the reset is worth roughly
+a fifth of the guard's presence.)
+
+The 7% cell is the exception, and it is the plunger again: Glasshouse serves a ball's
+width from its left lane, and the served ball drops straight back into it. That guard is
+spent inside the first second of nearly every ball, which is also why the loss reset does
+nothing for it — it just gets spent again immediately. It is still a genuine save (0.1792
+→ 0.1156 drains/s), but it is a save the board makes for you rather than one the operator
+places.
+
+**OPEN, and now sharper.** Glasshouse's outlanes are barely where a tube-arrival dies, and
+its plunger eats the left guard before the ball is properly in play — the one thing the
+loss reset cannot help, because the spend happens on the new ball too. Either the guard
+moves on that board, the plunger does, or Glasshouse is simply not a board the guard is
+for.
 
 ## 7. Boards **DECIDED**
 

@@ -112,6 +112,7 @@ local THEME_HIT = {
   post    = { 1.00, 0.60, 0.35 },
   bumper  = { 1.00, 0.90, 0.35 },
   sling   = { 1.00, 0.55, 0.80 },
+  guard   = { 0.55, 0.95, 1.00 },
 }
 
 local function on_impact(ev, defs)
@@ -215,6 +216,10 @@ function FX.update(match, events, dt)
       pulses[ev.board]["target:" .. ev.index] = 0.30
     elseif ev.kind == "sling" then
       pulses[ev.board]["sling:" .. ev.index] = 0.30
+    elseif ev.kind == "guard" then
+      -- Keyed by side rather than index: the guards are "left" and "right",
+      -- which is also how the two players talk about them.
+      pulses[ev.board]["guard:" .. ev.side] = 0.30
     elseif ev.kind == "award" then
       add_award(ev.board, ev.x, ev.y, ev.value)
     end
@@ -273,7 +278,7 @@ end
 
 --- How lit a struck thing is right now, 0..1. render.lua asks per object.
 ---@param board string
----@param kind "bumper"|"sling"|"target"
+---@param kind "bumper"|"sling"|"guard"|"target"
 ---@param index integer
 ---@return number
 function FX.hit_pulse(board, kind, index)

@@ -51,6 +51,14 @@ function M.new(boards)
       -- state stays serializable (§5.2), and both survive the ball leaving
       -- -- that is the point: the dormant board keeps what you built.
       meters = {}, lit = {}, links = def.links or {},
+      -- §6.2 The outlane guard: which side the barrier is currently across.
+      -- One value, not two booleans, because the whole point is that it can
+      -- only ever be on one side and choosing is the cost.
+      guard = def.guards and def.guards.start or nil,
+      -- Seconds until the bar can deploy again. It is a number rather than a
+      -- boolean because the operator has to be able to see it coming back:
+      -- "eight seconds" is a thing you can plan around, "not yet" is not.
+      guard_cooldown = 0,
     }
     for _, d in ipairs(def.devices) do
       -- `commanded` is a rule-level fact: what the operator has asked for.
@@ -81,6 +89,29 @@ function M.apply_intent(s, it)
   local role  = intents.role_of(it.player, s.active)
   local board = s.boards[s.active]
   if not board then return end
+
+  -- §6.2 The outlane guard. The operator's flipper buttons are the two
+  -- controls their role otherwise leaves them nothing to do with, so they
+  -- move the barrier: either button switches it to the other outlane.
+  --
+  -- Either button rather than "left button, left lane" on purpose. The
+  -- operator is looking at a board that is not theirs, being shouted at, and
+  -- the only question they have to answer is "the other side?" -- which is
+  -- one bit, and deserves one control, not a mapping to get backwards.
+  --
+  -- Presses only. A toggle that also fired on release would flip twice per
+  -- tap and land back where it started.
+  --
+  -- Switching sides is allowed while the guard is spent, and that is not an
+  -- oversight: a recharging guard is still a decision, because the operator
+  -- is choosing where it comes back. The renderer draws the empty outline on
+  -- the chosen side filling up, so the choice is visible before it matters.
+  if role == "operator" and intents.FLIPPER_ACTIONS[it.action] then
+    if it.pressed and board.guard then
+      board.guard = (board.guard == "left") and "right" or "left"
+    end
+    return
+  end
 
   if role == "flipper" then
     if it.action == "flip_left" or it.action == "flip_right" then
@@ -148,6 +179,16 @@ function M.update(s)
   s.rescue     = nil
   local cmds = {}
 
+  -- §6.2 The outlane guard recharges on wall-clock time, on BOTH boards and
+  -- in every phase. A cooldown that only ran on the active board would mean a
+  -- guard spent on Foundry is still spent when you come back to it ten passes
+  -- later, which turns a per-ball cost into a permanent one.
+  for _, b in pairs(s.boards) do
+    if (b.guard_cooldown or 0) > 0 then
+      b.guard_cooldown = math.max(0, b.guard_cooldown - dt)
+    end
+  end
+
   if s.phase == "serve" then
     s.timer = s.timer - dt
     if s.timer <= 0 then
@@ -194,6 +235,22 @@ function M.update(s)
       s.stats.drains = s.stats.drains + 1
       s.stats.relay  = 0
       score.end_rally(s.stats)
+      -- §6.2: and the guard comes back with the new ball, on BOTH boards.
+      --
+      -- The cooldown is what makes the save scarce WITHIN a ball; charging
+      -- it against the next one as well is a different and much worse thing,
+      -- because the player who spends it is not the player who pays. 30s is
+      -- longer than a ball lives, so without this a save near the end of one
+      -- ball silently disarms the start of the next two.
+      --
+      -- Both boards, because a drain ends the rally for both of them -- the
+      -- same reason score.end_rally above takes the whole rally score and not
+      -- the half of it earned on the board that dropped it.
+      --
+      -- Note this is the DRAIN branch, not purgatory: a rescue (§8) means the
+      -- ball was never lost, so it keeps the rally AND keeps the guard spent.
+      -- You do not get a fresh save for nearly dropping it.
+      for _, b in pairs(s.boards) do b.guard_cooldown = 0 end
     end
 
   elseif s.phase == "drain" then
@@ -309,6 +366,25 @@ function M.consume(s, events)
         kind = "sling", value = score.award(s.stats, "sling"),
         board = ev.board, x = ev.x, y = ev.y,
       }
+
+    elseif ev.kind == "guard" and s.phase == "play" then
+      -- §6.2's trade, paying out, ONCE. The contact spends the guard: it
+      -- retracts on the next step and cannot come back for GUARD_COOLDOWN
+      -- seconds, so this is a save the two of them have to decide to spend
+      -- rather than a lane they closed.
+      --
+      -- The cooldown check is also what makes "once" exact. The bar takes
+      -- 300ms to retract and can catch the ball again on its way down; that
+      -- second contact is the same save and must not score twice or re-arm
+      -- the timer a fresh one would have started.
+      local board = s.boards[ev.board]
+      if board and (board.guard_cooldown or 0) <= 0 then
+        board.guard_cooldown = C.GUARD_COOLDOWN
+        s.last_award = {
+          kind = "guard", value = score.award(s.stats, "guard"),
+          board = ev.board, x = ev.x, y = ev.y,
+        }
+      end
 
     elseif ev.kind == "bumper" and s.phase == "play" then
       local board = s.boards[ev.board]

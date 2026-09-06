@@ -83,6 +83,13 @@ function M.update(match, events)
         session.duty[active][id] = (session.duty[active][id] or 0) + 1
       end
     end
+    -- §6.2 The outlane guard is a state like the others, so it earns a duty
+    -- line too -- and unlike the gate and the post it is never OFF, so the
+    -- two numbers are a split of the same time and read as a preference.
+    if ab.guard then
+      local k = "guard " .. ab.guard
+      session.duty[active][k] = (session.duty[active][k] or 0) + 1
+    end
   end
 
   for _, ev in ipairs(events) do
@@ -96,8 +103,9 @@ function M.update(match, events)
       local guarded = ab and ab.devices.post and ab.devices.post.commanded
       session.rallies[#session.rallies+1] = session.prev_relay
       session.drains_by_board[ev.board] = (session.drains_by_board[ev.board] or 0) + 1
-      line("E %d drain %s after=%d post=%s score=%d", s.tick, ev.board,
-           session.prev_relay, guarded and "up" or "down", s.stats.score)
+      line("E %d drain %s after=%d post=%s guard=%s score=%d", s.tick, ev.board,
+           session.prev_relay, guarded and "up" or "down",
+           (ab and ab.guard) or "-", s.stats.score)
     elseif ev.kind == "target" or ev.kind == "bumper" then
       line("E %d %s %s", s.tick, ev.kind, ev.board)
     end
