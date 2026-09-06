@@ -211,6 +211,8 @@ cool things to add or improve, document them, add them here.
 - **Frame cost measured** · DONE (e68d9bd). Nothing added tonight was costed until now.
 - **CLAUDE.md tooling section** · DONE (b9c295e). It was an empty header.
 - **render.lua refactor** · DONE (0ad8203). Two functions had grown past reading.
+- **Replay determinism verified (§5.1)** · DONE (acd3f5b). The promise the session log
+  rests on had never been checked.
 - **Session structure (§13.2)** · NOT ATTEMPTED, deliberately. There is a score and
   nothing that ends. It is the biggest open question left, and it is also the one where
   a wrong guess costs the most: team lives, run length and whether there is an ending
@@ -804,5 +806,31 @@ produced eight broken references on the first attempt (`ctx.ctx.prev`,
 `draw_ctx.incoming`, a stray `local def = defs[active]` inside a function that already
 takes `def`). luacheck caught every one; the screenshots confirmed the fixes were right
 rather than merely syntactic.
+
+### Iteration 20 — a global side effect, and an untested promise · `acd3f5b`
+
+Read back the night's code looking for real problems rather than more features. Two.
+
+**`app/audio.lua` was reseeding the global RNG** at load so its synthesized noise would
+be identical every run. It works, and it silently reseeds everything that later calls
+`math.random` — `app/fx.lua`'s spark angles and screen shake do exactly that today.
+Replaced with a small local LCG.
+
+Auditing that turned up something better: **`math.random` appears only in `app/`.**
+`core/` and `sim/` contain no randomness at all — which is precisely what §5.1's "whole
+matches can be recorded and replayed from the intent stream" depends on, and
+`app/record.lua` has been writing that stream since iteration 10 without anything ever
+checking the promise underneath it. Now tested.
+
+**My first version of that test was too weak, and finding out was the useful part.** It
+compared only the *final* state, so injecting random noise into the sim left it passing
+— the ball happened to be gone at the end and the counters agreed — while a different
+test failed. A trajectory that diverges and reconverges is still a replay that doesn't
+replay. It now checksums ball position and score every 7th tick across the whole run.
+
+And the first mutation was itself a bad probe: the perturbed velocity was only *applied*
+above the speed clamp, so it changed almost nothing. Re-run against a path that always
+executes (0.1% jitter on the flipper motor), the strengthened test fails and nothing
+else does.
 
 *(iterations append here)*
