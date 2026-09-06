@@ -215,6 +215,7 @@ cool things to add or improve, document them, add them here.
   rests on had never been checked.
 - **Restart bug in the recorder** · DONE. Pressing R threw away the run it ended.
 - **Gamepad disconnect bug** · DONE. Unplugging one pad renumbered the other player.
+- **Held device key lost on role swap** · DONE (f1407a4). A released gate stayed open.
 - **Session structure (§13.2)** · NOT ATTEMPTED, deliberately. There is a score and
   nothing that ends. It is the biggest open question left, and it is also the one where
   a wrong guess costs the most: team lives, run length and whether there is an ending
@@ -876,5 +877,30 @@ detach whether a third pad was accepted was luck.
 
 Five tests where there were none, including that the two players' keyboard bindings are
 disjoint — they share one keyboard, so an overlap would give one keypress to both.
+
+### Iteration 23 — a released gate that stayed open · `f1407a4`
+
+Roles swap on every crossing, and `apply_intent` decided what an intent meant purely
+from the role a player has *now*. So you could press the gate as operator on board A,
+still be holding it when the ball landed on B and made you the flipper, and **have your
+release thrown away** — a flipper has no operator actions, so it fell through.
+
+Board A's gate then stayed commanded open forever with your finger off the key. §6.2
+makes an open gate close the safe return loop, so the ball came back later to a board
+whose safe return had quietly gone. It righted itself only after a full press-and-release
+once you were the operator again.
+
+The codebase had already fixed this class for flippers (`release_flippers`, "so a held
+key doesn't leave a flipper stuck up on a board nobody is looking at"). Devices were
+missed.
+
+**My first fix was wrong and an existing test caught it.** Releasing every device when
+the ball leaves a board does stop the stuck gate — and destroys §7's "the dormant board
+keeps its state", which a test already asserted. Reverted.
+
+The real bug is narrower than "devices persist": a **release has no owner**. A press
+belongs to the board that was active when it happened, and so does its release — not to
+whatever board is active by the time the finger comes up, which would close a gate on the
+wrong table. Held keys now remember where they went.
 
 *(iterations append here)*
