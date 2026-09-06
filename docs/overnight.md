@@ -113,25 +113,33 @@ calls that have since been made and measured. The doc has been patched section b
 section as the night went on; it needs one honest pass to describe what is actually
 there, so Polle reads the game rather than its history.
 
-### 14. What sets Foundry's 20ms timing window?  ·  OPEN (two suspects eliminated)
+### 14. What sets Foundry's 20ms timing window?  ·  OPEN (five suspects eliminated)
 
 Receiving on Foundry has a usable band of roughly 5–25ms before contact, against
-Glasshouse's 15–70ms. Both have a hard cliff at lead 0 — flip late and nothing
-happens, which is just pinball. The unexplained part is the **width**, not the
-position.
+Glasshouse's 15–70ms. Both have a hard cliff at lead 0 — flip late and nothing happens,
+which is just pinball. The unexplained part is the **width**, not the position.
 
 **Ruled out by measurement:**
 
-- *The bumper cluster* randomising the ball on the way down. Removing it raises the
-  peak 63% → 72% and leaves the window at 20ms.
-- *The drain gap.* Foundry's is 27.6px vs Glasshouse's 43.6px. Widening Foundry to
-  match leaves the window at 20ms and lowers the peak to 53%.
-- *A truncated sweep.* Negative leads (ball already on the flipper) score 0% on both
-  boards, so Foundry's peak is not sitting off the left edge of the old grid.
+| suspect | result |
+|---|---|
+| The bumper cluster randomising the descent | Removing it: peak 63% → 72%, window unchanged at 20ms |
+| The drain gap (27.6px vs 43.6px) | Widening Foundry to match: window unchanged, peak drops to 53% |
+| A truncated sweep hiding the peak | Negative leads score 0% on both boards |
+| Arrival speed | At matched speeds the two boards behave almost identically |
+| Balls reaching the tube without a flip | 0% on both boards with nobody flipping |
 
-**Still to try:** the entry point's position relative to the ramp, the descent path
-down the left orbit, the ramp mouth's flare width. Worth finding — 20ms is close to
-the floor of what a person can time consistently.
+**Found instead, and worth knowing on its own:** the window narrows sharply with
+arrival speed on *both* boards — 40ms at 150px/s down to 10ms at 850px/s
+(`tests/probe_speed_window.lua`). Since §9 raises arrival speed by up to 55% with relay
+heat, **a hot rally is harder to hold for this reason as well as the intended one.**
+That is either a happy accident or a difficulty spike nobody chose; a human at the
+keyboard should say which.
+
+**Where to look next.** Dropping the ball straight onto the flipper reproduces
+Foundry's real 20ms but *not* Glasshouse's real 50ms. So the difference is in the
+approach path — where along the flipper the ball lands, and with what horizontal
+velocity — not in the flipper or the ramp. That is the next thing to instrument.
 
 ### 11+ Think of other ways to improve the game  ·  IN PROGRESS
 
@@ -565,5 +573,24 @@ lie. A peril sound plays instead; the loss lands when the window closes.
 that ends. It's the biggest open question left and the one where a wrong guess costs
 most — team lives, run length and whether there's an ending at all determine the shape
 of everything above them. That's Polle's call, not mine.
+
+### Iteration 13 — item 14: five suspects down, and a finding I wasn't looking for
+
+No answer yet on Foundry's narrow window, but the map is much sharper. Eliminated:
+bumpers, drain gap, a truncated sweep, arrival speed, and free passes with no flip.
+
+**The useful accident:** the timing window narrows sharply with arrival speed on *both*
+boards — 40ms at 150px/s down to 10ms at 850px/s. §9 raises arrival speed by up to 55%
+with relay heat, so **a hot rally is harder to hold for this reason too**, not only the
+intended one. Whether that compounding feels like escalation or like the game turning on
+you is a keyboard question.
+
+Also learned where *not* to look: dropping the ball straight onto the flipper reproduces
+Foundry's real 20ms but not Glasshouse's real 50ms, so the difference lives in the
+approach path — where along the flipper the ball lands and with what horizontal velocity
+— not in the flipper or the ramp.
+
+Stopping the investigation here rather than burning more of the night on it. Five clean
+eliminations and a signposted next step is worth more than a sixth guess.
 
 *(iterations append here)*
