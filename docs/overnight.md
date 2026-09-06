@@ -214,6 +214,7 @@ cool things to add or improve, document them, add them here.
 - **Replay determinism verified (§5.1)** · DONE (acd3f5b). The promise the session log
   rests on had never been checked.
 - **Restart bug in the recorder** · DONE. Pressing R threw away the run it ended.
+- **Gamepad disconnect bug** · DONE. Unplugging one pad renumbered the other player.
 - **Session structure (§13.2)** · NOT ATTEMPTED, deliberately. There is a score and
   nothing that ends. It is the biggest open question left, and it is also the one where
   a wrong guess costs the most: team lives, run length and whether there is an ending
@@ -855,5 +856,25 @@ the moment anyone restarted, which in a playtest is constantly.
 
 Runs are now banked as they end and the summary sums across them (maxima take the max,
 so "best rally" stays a best and doesn't become a sum), reporting the restart count.
+
+### Iteration 22 — unplugging a gamepad swapped the players
+
+`app/input.lua` was the one module the night hadn't touched or read. Reading it turned
+up a real bug with an entirely ordinary trigger.
+
+`M.detach` used `table.remove`, which closes the gap. **Unplug player 1 and player 2's
+pad shifts into slot 1** — from that moment player 2 is driving player 1's board: their
+flippers, their devices, the wrong half of a two-player game, with nothing on screen
+saying anything happened. Two players, one ball and swapped identities is close to the
+worst failure this game has available, and it needs no bug of its own to trigger — just
+a controller running out of charge mid-rally.
+
+Slots are now fixed permanently; a disconnect empties its slot, a reconnect takes the
+lowest free one. That also fixes a latent second problem: `#` is undefined in Lua on a
+table with holes, and `attach` used it to decide whether there was room, so after any
+detach whether a third pad was accepted was luck.
+
+Five tests where there were none, including that the two players' keyboard bindings are
+disjoint — they share one keyboard, so an overlap would give one keypress to both.
 
 *(iterations append here)*
