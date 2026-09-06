@@ -248,6 +248,11 @@ They are choices to react to, not decisions.
   This is the most likely thing to make the game feel unfair at the keyboard.
 - **Nothing ends.** There is a score and no session structure at all (§4.3a). Every
   system built overnight assumes an endless run.
+- **The rescue may make the ball too hard to lose.** A 60-minute soak of random play
+  took 156 rescues against 25 drains — an 86% save rate. Random play mashes the post
+  far more than a person would, so that number is not a verdict; but if a human session
+  also lands anywhere near it, §8's purgatory window is too generous and the drain has
+  stopped meaning anything. The session log reports rescues, so one playtest settles it.
 - **None of the overnight work has been played.** Every number in this document
   comes from a headless probe. They say the systems function; they cannot say the
   game is fun.
@@ -261,6 +266,22 @@ They are choices to react to, not decisions.
   dependency-free stand-in with the same API, so `make test-core` needs no rocks.
   Switching the specs over to `busted` is a separate call, not a blocked one.
   Note `~/.luarocks/bin` is not on `PATH`, so `busted` needs its full path.
+
+## 5a. What has actually been run
+
+Everything below is headless except where noted. `make check` is the gate; the probes
+are measurement tools (see `CLAUDE.md`).
+
+| | status |
+|---|---|
+| `make check` — layers, lint, types, geometry, 97 core, 38 sim, 60s soak | green, 3.6s |
+| `love .` — the real frame loop, window and audio | runs clean, writes a session log |
+| `make shot` — §7 visual check | four reference frames, used to verify a refactor |
+| 60-minute soak with per-tick invariants | 864,000 ticks, all held |
+| Replay determinism (§5.1) | two runs of one intent stream agree, checksummed |
+| Frame cost (§3) | 26µs per 60fps frame, 0.2% of budget |
+
+What has **not** been run is a person. Every number in this document came from a probe.
 
 ## 6. The question
 

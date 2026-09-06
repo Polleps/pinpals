@@ -40,6 +40,10 @@
 >    differently per board. Tactical, or just inconsistent?
 > 3. **The cross-board loop** — charge Foundry, pass, clear the vault, come home to lit
 >    bumpers. Does that arc survive two people shouting at each other?
+> 4. **How often you get saved.** A 60-minute soak of random play rescued 156 balls
+>    against 25 drains. Random play mashes far more than a person, so that is not a
+>    verdict — but if your session lands near 86%, the rescue window is too generous
+>    and losing the ball has stopped meaning anything. The log counts rescues.
 >
 > ### What needs you, not me
 >
