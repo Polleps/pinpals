@@ -213,6 +213,7 @@ cool things to add or improve, document them, add them here.
 - **render.lua refactor** · DONE (0ad8203). Two functions had grown past reading.
 - **Replay determinism verified (§5.1)** · DONE (acd3f5b). The promise the session log
   rests on had never been checked.
+- **Restart bug in the recorder** · DONE. Pressing R threw away the run it ended.
 - **Session structure (§13.2)** · NOT ATTEMPTED, deliberately. There is a score and
   nothing that ends. It is the biggest open question left, and it is also the one where
   a wrong guess costs the most: team lives, run length and whether there is an ending
@@ -832,5 +833,27 @@ And the first mutation was itself a bad probe: the perturbed velocity was only *
 above the speed clamp, so it changed almost nothing. Re-run against a path that always
 executes (0.1% jitter on the flipper motor), the strengthened test fails and nothing
 else does.
+
+### Iteration 21 — pressing R threw away the run it ended
+
+Found reading back `main.lua`'s key handling. `R` builds a new Match with zeroed stats,
+and the recorder kept accumulating its own rally list against it, so the summary
+described the wrong game:
+
+```
+before restart: score 24800, drains 0
+
+score 250    best single rally was worth 250
+passes 0 (0.0/min)   drains 0 (0.0/min)   longest rally 0 crossings
+rally length, 5 completed rallies: ...
+```
+
+Two minutes of play reported as 250 points and zero passes, sitting directly above five
+completed rallies it had just contradicted. The session log exists so a playtest
+produces numbers rather than an impression — and this quietly made those numbers wrong
+the moment anyone restarted, which in a playtest is constantly.
+
+Runs are now banked as they end and the summary sums across them (maxima take the max,
+so "best rally" stays a best and doesn't become a sum), reporting the restart count.
 
 *(iterations append here)*
