@@ -18,3 +18,37 @@ It's okay to take your time on good architecture.
 Since this is a game, performance might take precedence over code quality in critical areas.
 
 ## Tooling
+
+`make check` is the only gate that matters: layers, lint, types, static board geometry,
+core tests, headless physics, and a 60s integration soak. ~3.6s. Run it before claiming
+anything is done. `make run` plays; `make shot TICKS=N` renders a frame to a PNG —
+**look at it**, several bugs this project has shipped were invisible to the gates and
+obvious in the picture.
+
+## Measuring
+
+Board layouts are data (`data/tables/`), and every board bug so far has been a
+coordinate whose consequences nobody had measured. `tests/probe_*.lua` are measurement
+tools, not gates — run one with `PINPALS_SUITE=tests.probe_reach love . --test`:
+
+| probe | answers |
+|---|---|
+| `reach` | where can a flipper shot actually go, and what do shots do |
+| `identity` | ball life, drain rate and points/s per board (§13.1) |
+| `timing`, `approach`, `speed_window` | how hard is it to receive a pass, and why |
+| `post`, `impulses`, `scoring` | device trade-offs, contact thresholds |
+| `soak`, `perf` | everything at once for 10 minutes; frame cost |
+
+Four things this project has learned the hard way, all of which cost a wrong conclusion
+first:
+
+1. **Pinball is chaotic — average over seeds.** A single 180s run moved a bumper count
+   by 60%. One run measures nothing.
+2. **Harness details dominate.** Spawning a ball 15.9px above a flipper instead of
+   10.6px erased a device's entire measured effect. Holding a flipper up for a whole
+   trace invented a 10% stuck-ball rate that does not exist.
+3. **Check the shape, not just the number.** Rates that are all multiples of 1/7 mean
+   seven samples, not twenty-eight.
+4. **Measure the thing you are about to assert.** Both board identities and the post's
+   trade-off shipped documented backwards, because the claims were written and never
+   checked.
