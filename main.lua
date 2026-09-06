@@ -125,6 +125,9 @@ function love.keypressed(key)
   if key == "escape" then love.event.quit() return end
   if key == "f1" then debug_on = not debug_on return end
   if key == "r" then
+    -- Bank the run before discarding it, or its numbers leave with the Match
+    -- that produced them and the session log reports the wrong game.
+    record.restart(match)
     match = require("sim.match").new(boards)
     fx.reset()
     return

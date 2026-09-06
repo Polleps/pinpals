@@ -63,6 +63,32 @@ return function(H)
       record.finish(m)
     end)
 
+    it("keeps a run's numbers when the player restarts", function()
+      -- Pressing R builds a whole new Match with zeroed stats while this
+      -- session keeps accumulating. A summary that read the live match
+      -- reported the last few seconds against rallies from before the
+      -- restart: measured, 24,800 points of play came out as "score 250,
+      -- passes 0" beside five completed rallies.
+      record.start(boards)
+      local m = fake_match("a")
+      m.state.stats.score  = 24800
+      m.state.stats.passes = 3
+      m.state.stats.best_rally_score = 24800
+      m.state.stats.best_relay = 3
+      record.update(m, {})
+      record.restart(m)
+
+      local fresh = fake_match("a")            -- what R produces
+      fresh.state.stats.score = 250
+      record.update(fresh, {})
+      local out = record.summary(fresh)
+      A.truthy(out:find("score 25050"), "the retired run's score was lost:\n" .. out)
+      A.truthy(out:find("passes 3"),    "the retired run's passes were lost:\n" .. out)
+      A.truthy(out:find("24,?800"),     "best rally was lost:\n" .. out)
+      A.truthy(out:find("2 runs"),      "the restart is not reported:\n" .. out)
+      record.finish(fresh)
+    end)
+
     it("counts rallies that never got a single pass", function()
       -- The one number that would say the prototype has failed: if most
       -- rallies die before a crossing, there is no rally to have a feel.

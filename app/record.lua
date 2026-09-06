@@ -36,6 +36,13 @@ function M.start(boards)
     ticks    = 0,
     prev_relay = 0,
     prev_phase = nil,
+    -- Runs, plural. Pressing R builds a whole new Match with zeroed stats
+    -- while this session keeps accumulating, so a summary that read the live
+    -- match would report the last few seconds against rallies from before
+    -- the restart. Measured: 24,800 points of play reported as "score 250,
+    -- passes 0" next to five completed rallies. Each run is banked here as
+    -- it ends.
+    runs     = {},
   }
   for id in pairs(boards) do
     session.duty[id] = { gate = 0, post = 0 }
@@ -100,9 +107,44 @@ function M.update(match, events)
   session.prev_phase = s.phase
 end
 
+--- Bank a finished run. Called when the player restarts, so the numbers that
+--- run produced are not lost with the Match that produced them.
+---@param match table the match being retired
+function M.restart(match)
+  if not session then return end
+  local st = match.state.stats
+  session.runs[#session.runs+1] = {
+    score = st.score, passes = st.passes, drains = st.drains,
+    rescues = st.rescues, best_rally_score = st.best_rally_score,
+    best_relay = st.best_relay,
+  }
+  line("E %d restart  (run %d ended on %d points)",
+       match.state.tick, #session.runs, st.score)
+end
+
 ---------------------------------------------------------------------------
 -- Summary
 ---------------------------------------------------------------------------
+
+--- Session totals: every banked run plus the one still going.
+---@param runs table[] runs already retired by a restart
+---@param live table the current match's stats
+local function totals(runs, live)
+  local t = { score = 0, passes = 0, drains = 0, rescues = 0,
+              best_rally_score = 0, best_relay = 0 }
+  local all = {}
+  for _, r in ipairs(runs) do all[#all+1] = r end
+  all[#all+1] = live
+  for _, r in ipairs(all) do
+    t.score   = t.score   + (r.score   or 0)
+    t.passes  = t.passes  + (r.passes  or 0)
+    t.drains  = t.drains  + (r.drains  or 0)
+    t.rescues = t.rescues + (r.rescues or 0)
+    t.best_rally_score = math.max(t.best_rally_score, r.best_rally_score or 0)
+    t.best_relay       = math.max(t.best_relay,       r.best_relay or 0)
+  end
+  return t
+end
 
 local function percentile(sorted, p)
   if #sorted == 0 then return 0 end
@@ -114,14 +156,15 @@ end
 ---@return string
 function M.summary(match)
   if not session then return "" end
-  local s = match.state
-  local st = s.stats
+  local st = totals(session.runs, match.state.stats)
   local mins = session.ticks * C.FIXED_DT / 60
   local out = {}
   local function put(fmt, ...) out[#out+1] = fmt:format(...) end
 
   put("pinpals session -- %s", os.date("%Y-%m-%d %H:%M", session.started))
-  put("%.1f minutes of play, %d ticks", mins, session.ticks)
+  put("%.1f minutes of play, %d ticks%s", mins, session.ticks,
+      (#session.runs > 0) and (", %d runs (restarted %d times)")
+        :format(#session.runs + 1, #session.runs) or "")
   put("")
   put("score %d    best single rally was worth %d", st.score, st.best_rally_score)
   put("passes %d (%.1f/min)   drains %d (%.1f/min)   longest rally %d crossings",
