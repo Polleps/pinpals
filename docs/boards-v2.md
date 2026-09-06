@@ -167,46 +167,63 @@ two devices, one gate and one paddle. Phase 5 may want a third.
 Each phase ends green on `make check`, with a screenshot **looked at**, and
 every probe number averaged over ≥6 seeds.
 
-**0 — room.** Derive the render layout from the real window size instead of the
-hardcoded 1000×780, and size the window to the desktop. Then resize both boards
-to 448×960 by scaling the existing coordinates ×1.167/×1.25 — a pure zoom,
-nothing redesigned. Re-run `probe_identity` and `probe_reach`.
-*Gate:* all gates green; the resize's effect on ball life and pass rate is
-recorded **on its own**, before anything else moves.
+**0 — room. DONE.** The render layout derives from the real window size and the
+window takes what the display can spare. Boards are 448×960.
 
-**1 — element kinds.** Slingshots, rollovers, drop targets: validator, geometry
-checks, sim fixtures, renderer, core tests. No board uses them yet.
-*Gate:* new geometry checks fail on a deliberately broken fixture board.
+> **The phase as planned was incoherent and the build said so.** "Resize the
+> boards, measure the resize alone" assumes there is a neutral place to put the
+> new room. There is not. Putting all 192px at the top lengthened the orbit
+> climb and made Foundry's bumper 1 and Glasshouse's entire bank unreachable —
+> caught by the existing reachability tests, not by anything static. The room
+> has to go where the complaint is, between the flippers and the ramp, and
+> that is a design change, not a resize. Phases 0, 2 and 3 landed as one edit
+> for the same reason.
 
-**2 — the traditional bottom.** Outlanes, dividers, inlanes, slingshots,
-rollovers on both boards.
-*Gate:* `probe_identity` for drain split (centre vs outlane) and ball life;
-`probe_post` re-run, because the post's whole meaning changed.
+**1 — element kinds. PART DONE.** Slingshots exist end to end: validated,
+geometry-checked, built, scored, drawn and sounded. `core/geometry.lua` now
+checks targets and slingshots through one `solids_of` list, so the next solid
+kind is checked by construction rather than by remembering.
+*Not done:* rollovers, drop targets.
 
-**3 — break the centre wall.** Foundry's orbit-and-diverter, Glasshouse's short
-ramp. Re-tune both gates' open/closed angles.
-*Gate:* `probe_reach` — no more than 55% of swept shots ending at the ramp, and
-**≥25% reaching above y=400 outside it.** This is the phase the whole plan is
-for; if this number does not move, nothing else was worth doing.
+**2 — the traditional bottom. DONE.** Outlane, divider, inlane and slingshot
+down each side of both boards.
 
-**4 — upper playfield.** Bumper pod and centre standups on Foundry; drop bank
-and standups on Glasshouse.
-*Gate:* a new `probe_coverage` — *every* scoring element is struck at least 5
-times per 120s, averaged over 6 seeds. Foundry's bumpers once measured 3 hits
-in 180s with two of three at exactly zero; a gate is cheaper than rediscovering
-that.
+**3 — break the centre wall. DONE.** Both channels end at y=380 instead of
+running to y=150. This was the phase the plan was for, and its gate is met
+comfortably: ≥25% of swept shots reaching above the ramp was the bar, and both
+boards now put 30–40% up *each* orbit.
 
-**5 — spinner, shooter lane, and possibly a third operator device** for the
-outlane guard. Optional, and only if 2–4 leave the board wanting it.
+**4 — upper playfield. PART DONE.** Foundry's bumper nest and Glasshouse's bank
+are re-placed and every element is struck in play. But the boards are still
+visibly empty — the whole right half of Foundry above y=560, and the band
+between the ramp mouth and the slingshots on both. **This is the next work.**
 
-**6 — rebalance and rewrite.** Re-measure both identities end to end and
-rewrite §5's stale tables from the new numbers.
+**5 — spinner, shooter lane, third device.** Not started.
+
+**6 — rebalance and rewrite. DONE for what exists.** Every measured table in
+the board files and `design.md` §7 was re-measured, not carried forward.
+
+### What placing content actually taught us
+
+Four upper-field placements were authored and measured dead before the ones
+that shipped. The rule they were all breaking is specific to a top-down board:
+**the ball arrives on a mostly vertical path, so anything sitting under
+anything else is in its shadow.** A real bumper nest stays live because the
+ball enters it at every angle; ours does not produce those angles up there. So
+content is spread across a band, never stacked, and `tests/probe_where.lua`
+now answers "where does a falling ball actually cross this line" before
+anything is placed rather than after it measures zero.
 
 ## 8. The risks worth naming
 
-1. **Three drain paths may make both boards far too drainy.** Outlane width is
-   the tuning knob and it is a steep one. If drains/s more than doubles,
-   narrow the outlanes before touching anything else.
+1. **Three drain paths may make both boards far too drainy. THIS HAPPENED.**
+   Glasshouse went from 0.0777 drains/s to 0.1533 and its mean ball life from
+   9.86s to 5.76s; Foundry from 0.0725 to 0.0793 and 12.19s to 9.46s. The
+   *relationship* is better than ever — Glasshouse used to drain only 7%
+   faster than Foundry despite a 16px wider gap, and now drains 93% faster, so
+   the identity is a fact rather than a claim. Whether 5.76s a ball is too
+   short is the open question, and outlane width is the knob. **Tune this
+   before adding anything else.**
 2. **The rescue gets rarer and the post gets weaker.** That is intended, but
    §8's 1.9s window was tuned against a post that stopped everything. Expect to
    retune it, and check the rescue does not become a mechanic nobody sees.

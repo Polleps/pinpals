@@ -42,6 +42,8 @@ tools, not gates — run one with `PINPALS_SUITE=tests.probe_reach love . --test
 | `identity` | ball life, drain rate and points/s per board (§13.1) |
 | `timing`, `approach`, `speed_window` | how hard is it to receive a pass, and why |
 | `post`, `impulses`, `scoring` | device trade-offs, contact thresholds |
+| `where` | where a falling ball crosses a line, and what an arrival does |
+| `ramp` | mouth height vs funnel width vs channel width, swept together |
 | `soak`, `perf` | everything at once for 10 minutes; frame cost |
 | `audio` | the synthesized kit is audible, unclipped and centred (`luajit tests/probe_audio.lua`) |
 
@@ -58,3 +60,6 @@ first:
 4. **Measure the thing you are about to assert.** Both board identities and the post's
    trade-off shipped documented backwards, because the claims were written and never
    checked.
+5. **The ball falls straight down, so nothing may sit under anything else.** Four
+   upper-field placements measured exactly zero hits before this was written down.
+   Content goes in a band, never a stack; `probe_where` says where the band is.
