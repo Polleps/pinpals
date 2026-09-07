@@ -53,17 +53,17 @@
 local pi = math.pi
 
 return {
-  id   = "a",
-  name = "Foundry",
-  size = { w = 448, h = 960 },
+  id         = "a",
+  name       = "Foundry",
+  size       = { w = 448, h = 960 },
 
   -- Static geometry. Each entry is a polyline: a flat list of x,y pairs.
-  walls = {
+  walls      = {
     -- Outer shell: left wall, top arc, right wall.
     -- Outer shell: left wall, top arc, right wall. Both side walls now run
     -- past the drain line: they are the outer wall of an outlane, and an
     -- outlane that stops above the drain is a shelf.
-    { 10,948,  10,90,  76,14,  372,14,  438,90,  438,948 },
+    { 10,  948, 10,  90,  76,  14,  372, 14, 438, 90, 438, 948 },
     -- The traditional bottom (docs/boards-v2.md §3). Down each side, in order
     -- from the outer wall: an OUTLANE that drains, a lane divider, an INLANE
     -- that feeds the flipper, and a slingshot above it. Before this the ball
@@ -82,8 +82,8 @@ return {
     -- chain descends throughout -- the bowl check would say so otherwise --
     -- and ends 9.9px outside its pivot, the offset measured for the old
     -- lower-wall chains and kept for the same reason.
-    { 36,700,  40,852,  110,864,  161,873 },
-    { 412,700,  408,852,  338,864,  287,873 },
+    { 36,  700, 40,  852, 110, 864, 161, 873 },
+    { 412, 700, 408, 852, 338, 864, 287, 873 },
     -- The pass ramp. A short channel high on the board, not the 390px
     -- corridor that used to run from y=150 to y=540 through the dead centre.
     --
@@ -125,14 +125,14 @@ return {
     --      248            5 / 1
     --      272            6 / 0
     --
-    { 183,560,  210,515,  210,380 },
-    { 289,560,  262,515,  262,380 },
+    { 183, 560, 210, 515, 210, 380 },
+    { 289, 560, 262, 515, 262, 380 },
     -- Roof over the ramp head. Without it the closed gate is a shelf the ball
     -- lands on from the upper playfield and sits on forever; tilting the gate
     -- only moves the resting place into the corner against the wall. The peak
     -- sheds anything that lands on it, and it seals the ramp head so the only
     -- two outcomes are "through the mouth" or "back down the ramp".
-    { 210,380,  236,358,  262,380 },
+    { 210, 380, 236, 358, 262, 380 },
   },
 
   -- Two slingshots, one above each flipper, hypotenuse facing up-board and
@@ -145,8 +145,8 @@ return {
   -- triangle reaches inside the flipper's swept arc, which the geometry gate
   -- rejects: at pivot-24 it is 56.3px from the pivot against a 52.96px reach.
   slingshots = {
-    { p = { 66,772,  140,822,  66,830 } },
-    { p = { 382,772, 308,822, 382,830 } },
+    { p = { 66, 772, 140, 822, 66, 830 } },
+    { p = { 382, 772, 308, 822, 382, 830 } },
   },
 
   -- A's character: a bumper cluster. Chaotic, keeps the ball alive.
@@ -157,27 +157,35 @@ return {
   -- the heaviest traffic across the top and down both orbits rather than in
   -- the narrow left lane the cluster used to straddle.
   --
-  -- Arranged as a nest rather than a column, which is what a real table does
-  -- and what makes a bumper cluster feel like a place the ball gets stuck in
-  -- for a moment instead of three things it passes.
+  -- A "+" nest: north, west, south, east around a centre at (224,190).
   --
-  -- Spread across the band, NOT stacked. Two arrangements were tried and both
-  -- measured a dead bumper: two-up-one-down shadowed the lower one, and
-  -- one-up-two-down shadowed the lower left. In a top-down board the ball
-  -- arrives from above along a mostly vertical path, so anything with another
-  -- bumper directly above it is in a shadow -- the rattling that keeps every
-  -- bumper of a real nest live comes from the ball entering at angles this
-  -- board does not produce up here. Each of these three has open sky.
-  bumpers = {
-    { x = 56,  y = 230, r = 22, restitution = 1.15 },
-    { x = 168, y = 175, r = 22, restitution = 1.15 },
-    { x = 240, y = 205, r = 22, restitution = 1.15 },
-    -- Two more on the right, where probe_where puts a second heavy stream --
-    -- x=272..336 and x=368..400 at every height it samples -- and where the
-    -- board was simply empty. Foundry's identity is chaos, so the right way
-    -- to fill its dead half is more of the thing it already is.
-    { x = 312, y = 190, r = 22, restitution = 1.15 },
-    { x = 376, y = 252, r = 22, restitution = 1.15 },
+  -- The stacking rule (CLAUDE.md) says nothing may sit under anything else,
+  -- and a + puts its south arm directly under its north arm. That rule is
+  -- about SCENERY: a static target in a shadow is never reached. Bumpers
+  -- write their own traffic -- the north arm kicks the ball sideways and down
+  -- into the west and east arms, which throw it back across the south arm --
+  -- so a + is live as long as the nest as a whole sits in the stream. Get it
+  -- out of the stream and the shadow reappears and the south arm dies.
+  --
+  -- Centre and arm length were swept together (cx 200/224/248, cy 190/220/250,
+  -- arm 62/78/94; 8 seeds x 40s each) scoring on the WEAKEST arm, because the
+  -- total rate hides a dead bumper -- one candidate scored 0.75/s with an arm
+  -- on exactly zero. cx=224 cy=190 arm=78 was the only cell where all four
+  -- arms were comfortably live, and it was not close:
+  --
+  --     placement                 weakest arm     total
+  --     cx=224 cy=190 arm=78         27           0.66/s
+  --     cx=200 cy=220 arm=62          5           0.23/s
+  --     everything else             0..3       0.02..0.30/s
+  --
+  -- Confirmed on three independent seed bases at 10 seeds x 40s: 0.65 / 0.65 /
+  -- 0.64 per second, arms 66/67/95/32, 65/66/96/31, 66/63/94/33. Stable to the
+  -- third digit, which for this board is as repeatable as a number gets.
+  bumpers    = {
+    { x = 224, y = 112, r = 22, restitution = 1.15 }, -- north
+    { x = 146, y = 190, r = 22, restitution = 1.15 }, -- west
+    { x = 224, y = 268, r = 22, restitution = 1.15 }, -- south
+    { x = 302, y = 190, r = 22, restitution = 1.15 }, -- east
   },
 
   -- §6.2 "the wall that guards the outlane", and the answer to the outlanes
@@ -224,13 +232,25 @@ return {
   --
   -- Both boards carry the same numbers because both bottoms are the same
   -- shape; see board_b.lua, which points back here.
-  guards = {
-    start = "left",       -- arbitrary: the first toggle is a second into play
+  guards     = {
+    start = "left", -- arbitrary: the first toggle is a second into play
     kick  = 1.30,
-    { side = "left",  angle =  0.34, w = 30, h = 11,
-      up = { x = 24,  y = 694 }, down = { x = 24,  y = 986 } },
-    { side = "right", angle = -0.34, w = 30, h = 11,
-      up = { x = 424, y = 694 }, down = { x = 424, y = 986 } },
+    {
+      side = "left",
+      angle = 0.34,
+      w = 30,
+      h = 11,
+      up = { x = 24, y = 694 },
+      down = { x = 24, y = 986 }
+    },
+    {
+      side = "right",
+      angle = -0.34,
+      w = 30,
+      h = 11,
+      up = { x = 424, y = 694 },
+      down = { x = 424, y = 986 }
+    },
   },
 
   -- The drain gap is 27.6px, 16px narrower than Glasshouse's, and it is the
@@ -242,30 +262,30 @@ return {
   -- together with everything else. The sweep that chose it (33.6 / 27.6 /
   -- 21.6px) was run on the old board and is not repeated here: 21.6px against
   -- a 17.3px ball barely drained at all, which is a wall, not a board.
-  flippers = {
+  flippers   = {
     { side = "left",  x = 168, y = 880 },
     { side = "right", x = 280, y = 880 },
   },
 
   -- §6.1: both devices are persistent states with a visible travel time.
   -- §6.2: both give and take.
-  devices = {
+  devices    = {
     {
-      id     = "gate",
-      kind   = "gate",
-      travel = 0.30,
-      pivot  = { x = 210, y = 445 },
-      length = 52,
-      closed = 0.13,     -- arm seals the ramp: shots come back down it
-      open   = -1.57,    -- arm straight up the ramp wall: the mouth is reachable
-      tradeoff = "Opens the pass, closes the safe return loop.",
+      id           = "gate",
+      kind         = "gate",
+      travel       = 0.30,
+      pivot        = { x = 210, y = 445 },
+      length       = 52,
+      closed       = 0.13,  -- arm seals the ramp: shots come back down it
+      open         = -1.57, -- arm straight up the ramp wall: the mouth is reachable
+      tradeoff     = "Opens the pass, closes the safe return loop.",
       label_closed = "RETURN",
       label_open   = "PASS",
     },
     {
-      id     = "post",
-      kind   = "paddle",
-      travel = 0.26,
+      id           = "post",
+      kind         = "paddle",
+      travel       = 0.26,
       -- The post sits BELOW the flipper pivots, where a draining ball still
       -- meets it but a shot leaving the flipper mostly clears it. Above them
       -- it was not a trade at all but a pause button: pass rate 0% AND drain
@@ -291,10 +311,11 @@ return {
       -- off-centre, so the post mainly blocks whichever flipper has to shoot
       -- ACROSS the middle, and the two boards are blocked on opposite sides
       -- so the skill does not transfer.
-      up     = { x = 224, y = 905 },   -- extended: spans the drain gap
-      down   = { x = 224, y = 982 },   -- retracted below the playfield
-      w = 52, h = 12,
-      tradeoff = "Guards the centre drain; the pass gets much harder.",
+      up           = { x = 224, y = 905 }, -- extended: spans the drain gap
+      down         = { x = 224, y = 982 }, -- retracted below the playfield
+      w            = 52,
+      h            = 12,
+      tradeoff     = "Guards the centre drain; the pass gets much harder.",
       label_closed = "OPEN",
       label_open   = "GUARD",
     },
@@ -306,15 +327,15 @@ return {
   -- §7 Cross-board state. Foundry is the charging board: the chaos here is
   -- worth little on its own (24 points/s) but it fills the vault waiting on
   -- Glasshouse. You play A to prepare B.
-  links = {
+  links      = {
     { when = "bumper", charges = { board = "b", meter = "vault" } },
   },
 
-  tube  = { mouth = { x = 236, y = 398, r = 14 }, to = "b" },
-  entry = { x = 90, y = 116, dir = { x = -0.20, y = 1 } },
+  tube       = { mouth = { x = 236, y = 398, r = 14 }, to = "b" },
+  entry      = { x = 90, y = 116, dir = { x = -0.20, y = 1 } },
   -- Served into the open right field, clear of the lane furniture: a real
   -- shooter lane is phase 5, and a serve inside a 26px outlane rattles.
-  serve = { x = 400, y = 660, dir = { x = 0, y = -1 } },
+  serve      = { x = 400, y = 660, dir = { x = 0, y = -1 } },
 
-  drain_y = 940,
+  drain_y    = 940,
 }

@@ -266,6 +266,26 @@ function love.keypressed(key)
   push_intent(input.from_key(key, true, match.state.tick))
 end
 
+--- Click-to-copy for the coordinate overlay. The mouse does nothing in this
+--- game otherwise, so it costs no binding and no mode: point at where the
+--- thing should go, click, paste the pair into data/tables/*.lua.
+---
+--- Left copies `230, 85`, the form a polyline vertex is written in; right
+--- copies `x = 230, y = 85`, the form a bumper or a device home is written in.
+--- Which button is which follows the file: polylines are far and away the
+--- commoner paste, so they get the button the hand is already on.
+function love.mousepressed(x, y, button)
+  if mode ~= "play" or (button ~= 1 and button ~= 2) then return end
+  local at = render.pick_inspect(match, x, y)
+  if not at then return end
+  love.system.setClipboardText(button == 1 and at.text or at.keyed)
+  -- Naming the point as well as the numbers: a click that snapped to a vertex
+  -- 17px away copied that vertex, not the pixel under the cursor, and the
+  -- notice is where that becomes visible.
+  render.set_notice(("copied  %s%s"):format(button == 1 and at.text or at.keyed,
+                    at.tag and ("   (" .. at.tag .. ")") or ""), nil, "ok")
+end
+
 function love.keyreleased(key)
   if mode ~= "play" then return end
   push_intent(input.from_key(key, false, match.state.tick))

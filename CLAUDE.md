@@ -24,7 +24,10 @@ will not compile or will not validate leaves the running game alone and puts the
 error on screen, so a typo mid-edit cannot end a playtest. `--no-hot` turns the
 watcher off. In-game keys: `P` pause (freezes the simulation, not the camera or
 the watcher), `1` debug readout, `2` the coordinate overlay (every number the data
-file names, plus the cursor's own position; `TAB` swaps which board it reads),
+file names, plus the cursor's own position; `TAB` swaps which board it reads, and
+a click copies the coordinate under the cursor to the clipboard -- left as
+`230, 85`, right as `x = 230, y = 85` -- snapped to a labelled point when one is
+within reach),
 `3` force a reload, `R` restart. The number row rather than function keys: on a
 Mac every F-key is a chord with fn. `make coords BOARD=b` captures that overlay
 to a PNG.

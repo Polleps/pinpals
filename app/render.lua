@@ -122,7 +122,7 @@ local function ilerp(prev, cur, alpha) return prev and cur and lerp(prev, cur, a
 -- Camera
 ---------------------------------------------------------------------------
 
---- nil, or the id of the board whose coordinates are on screen (F2). It moves
+--- nil, or the id of the board whose coordinates are on screen (key 2). It moves
 --- the camera as well as drawing the overlay, so the board being inspected is
 --- the big one whether or not the ball happens to be on it -- otherwise the
 --- only way to look at the other board's numbers is to make the pass first.
@@ -130,11 +130,26 @@ M.inspect = nil
 
 ---@param active string the board to fall back to when switching the mode on
 function M.toggle_inspect(active)
-  M.inspect = M.inspect and nil or active
+  -- Not `M.inspect and nil or active`: that idiom can never yield nil, so the
+  -- mode would switch on and then refuse to switch back off.
+  if M.inspect then M.inspect = nil else M.inspect = active end
 end
 
 function M.swap_inspect()
   if M.inspect then M.inspect = (M.inspect == "a") and "b" or "a" end
+end
+
+--- The coordinate the overlay is naming at a screen position, or nil when the
+--- mode is off or the position is off the inspected board. The shake is taken
+--- out here for the same reason M.draw takes it out: the overlay lives inside
+--- that transform, so a click during a bumper hit would otherwise read a
+--- couple of pixels off.
+---@return table|nil { x, y, tag = string|nil, text = string }
+function M.pick_inspect(match, x, y)
+  if not M.inspect or not match.defs[M.inspect] then return nil end
+  local sx, sy = 0, 0
+  if fx then sx, sy = fx.shake_offset() end
+  return inspect.pick(match.defs[M.inspect], M.view[M.inspect], x - sx, y - sy)
 end
 
 --- Target scale per board. During transit both are pulled back to the same

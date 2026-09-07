@@ -1,4 +1,4 @@
---- Coordinate overlay for board editing (F2). Presentation only: it reads a
+--- Coordinate overlay for board editing (key 2). Presentation only: it reads a
 --- board definition and draws where its numbers are, and owns nothing.
 ---
 --- The rule it follows is worth stating, because it decides everything else:
@@ -278,28 +278,61 @@ local function callout(text, x, y, font, wmax)
   love.graphics.print(text, lx, y - 7)
 end
 
+--- What the cursor is naming: the nearest labelled point when one is within
+--- SNAP, otherwise the cursor's own position rounded to whole board pixels.
+--- nil once the cursor leaves the board.
+---
+--- Two copyable forms, because the data files want both: `text` is the bare
+--- pair a polyline is written in, `keyed` the `x = , y =` a bumper or a device
+--- home is written in. The readout and the click-to-copy handler both go
+--- through here, so the clipboard can only ever hold what the screen was
+--- showing.
+---@return table|nil { x, y, tag = string|nil, text = string, keyed = string }
+local function pick_from(def, view, pts, mx, my)
+  local bx = (mx - view.x) / view.s
+  local by = (my - view.y) / view.s
+  if bx < -20 or by < -20 or bx > def.size.w + 20 or by > def.size.h + 20 then return nil end
+
+  local hit = nearest(pts, view, mx, my)
+  local x, y, tag
+  if hit then
+    x, y, tag = hit.x, hit.y, hit.tag
+  else
+    x, y = math.floor(bx + 0.5), math.floor(by + 0.5)
+  end
+  return { x = x, y = y, tag = tag,
+           text  = ("%s, %s"):format(num(x), num(y)),
+           keyed = ("x = %s, y = %s"):format(num(x), num(y)) }
+end
+
+--- Public because main.lua copies the coordinate under the click (§9): the
+--- overlay is the one place the mouse means anything. Left button takes
+--- `text`, right button `keyed`.
+---@param mx number|nil cursor position in screen space, shake removed
+function M.pick(def, view, mx, my)
+  if not mx then return nil end
+  return pick_from(def, view, points_for(def), mx, my)
+end
+
 --- The cursor readout is the half of this mode that answers "where should I
 --- put it", as against "where is it". Hovering a point names it in full,
 --- because the dense labels above are coordinates only -- the tag is what
 --- tells you which line of the file you are looking at.
 local function cursor(def, view, pts, mx, my, font, wmax)
-  local bx = (mx - view.x) / view.s
-  local by = (my - view.y) / view.s
-  if bx < -20 or by < -20 or bx > def.size.w + 20 or by > def.size.h + 20 then return end
+  local at = pick_from(def, view, pts, mx, my)
+  if not at then return end
 
   love.graphics.setColor(HOT[1], HOT[2], HOT[3], 0.25)
   love.graphics.line(view.x, my, view.x + def.size.w * view.s, my)
   love.graphics.line(mx, view.y, mx, view.y + def.size.h * view.s)
 
-  local hit = nearest(pts, view, mx, my)
-  if hit then
-    local hx, hy = view.x + hit.x * view.s, view.y + hit.y * view.s
+  if at.tag then
+    local hx, hy = view.x + at.x * view.s, view.y + at.y * view.s
     love.graphics.setColor(HOT[1], HOT[2], HOT[3], 1)
     love.graphics.circle("line", hx, hy, 7)
-    callout(("%s   %s"):format(hit.tag, coords(hit.x, hit.y)), hx, hy - 16, font, wmax)
+    callout(("%s   %s"):format(at.tag, coords(at.x, at.y)), hx, hy - 16, font, wmax)
   else
-    callout(("%d, %d"):format(math.floor(bx + 0.5), math.floor(by + 0.5)),
-            mx, my - 10, font, wmax)
+    callout(at.text, mx, my - 10, font, wmax)
   end
 end
 
@@ -320,11 +353,17 @@ function M.draw(def, view, fonts, mx, my, wmax)
   draw_points(pts, view, fonts.tiny, {}, wmax)
   if mx then cursor(def, view, pts, mx, my, fonts.small, wmax) end
 
+  -- Two lines, because one ran off the right edge of the window: what the
+  -- board is, then what the mouse does with it. The example is spelled out
+  -- rather than described -- "RIGHT as x = , y =" reads as a typo.
+  local base = view.y + def.size.h * view.s + 4
   love.graphics.setFont(fonts.small)
   love.graphics.setColor(INK[1], INK[2], INK[3], 0.8)
   love.graphics.print(("%s  %dx%d   TAB other board"):format(
-                      def.name:upper(), def.size.w, def.size.h),
-                      view.x, view.y + def.size.h * view.s + 4)
+                      def.name:upper(), def.size.w, def.size.h), view.x, base)
+  love.graphics.setColor(INK[1], INK[2], INK[3], 0.55)
+  love.graphics.print("CLICK copies 230, 85   RIGHT copies x = 230, y = 85",
+                      view.x, base + 13)
 end
 
 return M
