@@ -11,6 +11,7 @@ return function(H)
   local intents = require("core.intents")
   local Board   = require("sim.board")
   local Match  = require("sim.match")
+  local ramps  = require("core.ramp")
   local boards = require("data.tables.init").load()
 
   --- A core-shaped command block, so sim tests don't need core/state.
@@ -1051,4 +1052,182 @@ return function(H)
       A.truthy(#m.feed <= 96, "feed grew unbounded: " .. #m.feed)
     end)
   end)
+  describe("curved walls (core/curve.lua)", function()
+    local curve = require("core.curve")
+
+    --- Board A with its shell corners rounded off. Not what ships -- the
+    --- shipped shell is still the octagon every measurement in this file was
+    --- taken against -- but it is the path a curved wall actually takes:
+    --- authored with nodes, expanded at load, built into edge fixtures here.
+    local function domed()
+      local b = {}
+      for k, v in pairs(boards.a) do b[k] = v end
+      b.walls = {}
+      for i, w in ipairs(boards.a.walls) do b.walls[i] = w end
+      local flat = curve.flatten({ 10, 948,
+                                   10, 90, { round = 40 },
+                                   76, 14, { round = 40 },
+                                   372, 14, { round = 40 },
+                                   438, 90, { round = 40 },
+                                   438, 948 }, "shell")
+      A.truthy(flat, "the rounded shell did not expand")
+      b.walls[1] = flat or {}
+      return b
+    end
+
+    it("expands into more wall than it was authored with", function()
+      local b = domed()
+      A.truthy(#b.walls[1] > #boards.a.walls[1],
+        "rounding the corners produced no extra vertices")
+    end)
+
+    it("builds a world and holds the ball inside it", function()
+      -- The end-to-end claim: a wall authored as curve nodes becomes ordinary
+      -- edge fixtures, and the ball meets them. A curve that expanded into a
+      -- gap would let the ball straight out of the top of the board.
+      local b = Board.new(domed())
+      b:serve()
+      local worst = 0
+      for _ = 1, 8 * C.TICK_HZ do
+        b:step(cmd(), b.ball ~= nil)
+        local x, y = b:ball_pos()
+        if x then
+          if y > boards.a.drain_y then break end
+          worst = math.max(worst, -y, -x, x - boards.a.size.w)
+        end
+      end
+      A.truthy(worst <= 0, ("the ball left the rounded shell by %.1fpx"):format(worst))
+    end)
+  end)
+
+  describe("elevated ramps (core/ramp.lua)", function()
+    local def = boards.a
+    local geom = def.ramps[1].geom
+
+    --- Fire a ball straight into a mouth of the skyway, fast enough to be let
+    --- on. Deliberately not a flipper shot: this is testing the layer, and a
+    --- flipper shot puts the aim under test at the same time.
+    ---
+    --- The spawn point is read off the ramp rather than typed, so moving a
+    --- foot in the board data moves these tests with it instead of quietly
+    --- firing balls at where the ramp used to be.
+    local function at_mouth()
+      local x, y, tx, ty = ramps.point_at(geom, 2)
+      return x - tx * C.RAMP_MOUTH, y - ty * C.RAMP_MOUTH, tx, ty
+    end
+
+    local function spawn_into(b, speed)
+      local x, y, tx, ty = at_mouth()
+      b:spawn(x, y, tx * speed, ty * speed)
+    end
+
+    local function launch(speed, sink)
+      local b = Board.new(def)
+      spawn_into(b, speed or 1600)
+      run(b, 6, cmd(), sink)
+      return b
+    end
+
+    it("puts the ball on the ramp and takes it off again", function()
+      local evs = {}
+      local b = launch(1600, evs)
+      local enter, exit = 0, 0
+      for _, ev in ipairs(evs) do
+        if ev.kind == "ramp" then
+          if ev.at == "enter" then enter = enter + 1 else exit = exit + 1 end
+        end
+      end
+      A.truthy(enter > 0, "a 1600px/s shot into the mouth never got on the ramp")
+      A.equal(enter, exit, "the ball got on the ramp more often than it got off")
+      A.equal(nil, b.on_ramp, "the ball was left stranded on the ramp layer")
+    end)
+
+    it("lifts the ball off the playfield while it is up there", function()
+      local b = Board.new(def)
+      spawn_into(b, 1600)
+      local top = 0
+      for _ = 1, 6 * C.TICK_HZ do
+        b:step(cmd(), true)
+        top = math.max(top, b:ball_z())
+      end
+      A.truthy(top > geom.height * 0.9,
+        ("the ball never climbed: highest z was %.1f of %g"):format(top, geom.height))
+    end)
+
+    it("is flat on the playfield whenever the ball is not on it", function()
+      local b = Board.new(def)
+      b:serve()
+      run(b, 1.0, cmd())
+      A.equal(nil, b.on_ramp)
+      A.equal(0, b:ball_z(), "a ball on the playfield reported a height")
+    end)
+
+    it("carries the ball OVER the bumpers it crosses", function()
+      -- The whole point of an elevated lane, and the one thing CLAUDE.md's
+      -- stacking rule could not previously allow: Foundry's west and east
+      -- bumpers sit directly under the skyway's arcs. A ball on the ramp has
+      -- to cross them without touching, and a ball on the playfield has to
+      -- reach them exactly as it did before.
+      local w = def.bumpers[2]
+      local b = Board.new(def)
+      spawn_into(b, 1600)
+      local hits, crossed = 0, false
+      for _ = 1, 6 * C.TICK_HZ do
+        local riding = b.on_ramp ~= nil
+        for _, ev in ipairs(b:step(cmd(), true)) do
+          -- Only while it is up there. What the ball does after it comes back
+          -- down is ordinary play, and on Foundry it very often is a bumper.
+          if ev.kind == "bumper" and riding then hits = hits + 1 end
+        end
+        -- Tracked in the same run rather than a second one, so a ball that
+        -- quietly fell back out of the mouth cannot pass this test by never
+        -- getting near a bumper in the first place.
+        local x, y = b:ball_pos()
+        if x and b.on_ramp
+           and math.sqrt((x - w.x)^2 + (y - w.y)^2) < w.r + C.BALL_RADIUS then
+          crossed = true
+        end
+      end
+      A.truthy(crossed, "the ball never actually passed over a bumper")
+      A.equal(0, hits, "a ball on the ramp set off a bumper underneath it")
+    end)
+
+    it("still lets a playfield ball hit the bumper under the ramp", function()
+      local w = def.bumpers[2]
+      local evs = {}
+      local b = Board.new(def)
+      b:spawn(w.x, w.y - w.r - C.BALL_RADIUS - 30, 0, 260)
+      run(b, 2.0, cmd(), evs)
+      local hit = false
+      for _, ev in ipairs(evs) do if ev.kind == "bumper" and ev.index == 2 then hit = true end end
+      A.truthy(hit, "the bumper under the ramp became unreachable from the playfield")
+    end)
+
+    it("refuses a ball too slow to reach the crown", function()
+      -- Below the gate the ball is not let on at all, and carries on up the
+      -- lane. A ramp you can fall into but not climb turns the orbit it sits
+      -- in into a dead end -- measured, when the gate ignored the up-board
+      -- climb and both boards' bumper reachability went red.
+      local evs = {}
+      local b = Board.new(def)
+      spawn_into(b, geom.enter_speed.start * 0.75)
+      run(b, 3, cmd(), evs)
+      for _, ev in ipairs(evs) do
+        A.truthy(ev.kind ~= "ramp", "a shot below the gate was let onto the ramp")
+      end
+      A.equal(nil, b.on_ramp)
+    end)
+
+    it("leaves a board with no ramps exactly as it was", function()
+      local bare = {}
+      for k, v in pairs(def) do bare[k] = v end
+      bare.ramps = {}
+      local b = Board.new(bare)
+      A.equal(0, #b.ramps)
+      b:serve()
+      run(b, 2, cmd())
+      A.equal(0, b:ball_z())
+    end)
+  end)
+
 end

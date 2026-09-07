@@ -228,6 +228,9 @@ end
 local IMPACT_VOICE = {
   wall = "wall", bumper = "bumper", flipper = "flipper",
   gate = "gate", post = "post", sling = "bumper", guard = "bumper",
+  -- The solid part of a ramp is a wall, and has to sound like one: it is the
+  -- structure a missed ramp shot comes back off.
+  rampwall = "wall",
 }
 
 --- Drain one frame's worth of events from sim/ into the speakers.

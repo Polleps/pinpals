@@ -33,7 +33,7 @@ Mac every F-key is a chord with fn. `make coords BOARD=b` captures that overlay
 to a PNG.
 
 `make check` is the only gate that matters: layers, lint, types, static board geometry,
-core tests, headless physics, and a 60s integration soak. ~3.6s. Run it before claiming
+core tests, headless physics, and a 60s integration soak. ~6s. Run it before claiming
 anything is done. `make run` plays; `make shot TICKS=N` renders a frame to a PNG —
 **look at it**, several bugs this project has shipped were invisible to the gates and
 obvious in the picture.
@@ -53,6 +53,7 @@ tools, not gates — run one with `PINPALS_SUITE=tests.probe_reach love . --test
 | `guard` | does the outlane guard save that lane, and what does the side cost |
 | `where` | where a falling ball crosses a line, and what an arrival does |
 | `ramp` | mouth height vs funnel width vs channel width, swept together |
+| `skyway` | is the elevated ramp shootable, and does a shot that gets on finish |
 | `soak`, `perf` | everything at once for 10 minutes; frame cost |
 | `audio` | the synthesized kit is audible, unclipped and centred (`luajit tests/probe_audio.lua`) |
 
@@ -72,3 +73,33 @@ first:
 5. **The ball falls straight down, so nothing may sit under anything else.** Four
    upper-field placements measured exactly zero hits before this was written down.
    Content goes in a band, never a stack; `probe_where` says where the band is.
+   The one exception is a RAMP (`ramps` in the board data): it runs on its own
+   Box2D collision layer, so the ball is either on it or under it and the space
+   beneath it stays live. Everything else still obeys the rule.
+
+## Curves and ramps
+
+Wall and ramp paths may carry curve nodes -- `{ round = r }` to fillet the corner
+it follows, `{ to =, via = }` / `{ to =, c1 =, c2 = }` for Beziers, `{ arc = {...} }`
+for a circular arc. `core/curve.lua` expands them into ordinary polylines at load
+time, so sim/, the geometry gate and the renderer only ever see flat x,y lists;
+the authored form survives on `path.spec`, which is what the coordinate overlay
+labels. Adding a curve node to a board file is the only place any of this is
+visible.
+
+A ramp is a centreline, a width, a crown height and a slope at each end. The
+slope is the STEEPEST gradient on that incline, and climbing costs
+`C.RAMP_CLIMB_G` -- about 8.8x playfield gravity -- so a ramp needs a real shot.
+`core/ramp.lua` computes the speed a mouth demands from the ramp's own energy
+budget; a ramp that admits balls it cannot lift turns the lane it sits in into a
+dead end, which is measured and documented at `C.RAMP_ENTER_SPEED`. Ramps are the
+one thing allowed outside the playfield rectangle.
+
+**A ramp foot is a solid object, and this is what makes placing one hard.** Near
+its feet the lane is inches off the playfield, so a ball cannot pass under it:
+`core/ramp.lua` generates a *skirt* there -- the rails, plus a slanted wall
+closing the lane so a shot that did not commit is sent back out rather than
+pocketed. That is a 54 x 71px block standing in whatever lane the foot is in,
+and both boards are nearly full at the height a foot needs. Expect placing one
+to be constrained from four directions at once; board_a.lua's `ramps` note walks
+through what closed in on the numbers there.

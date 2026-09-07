@@ -31,6 +31,8 @@ return function()
   local steps = math.floor(minutes * 60 * C.TICK_HZ)
   local seen  = {}
   local worst_feed, worst_meter = 0, 0
+  local ramp_ticks, worst_ride, rides = {}, 0, 0
+  local still, worst_still, stalled = 0, 0, nil
   local fails = {}
 
   local function fail(tick, msg)
@@ -109,6 +111,51 @@ return function()
     if not ok then fail(i, "objective errored: " .. tostring(o))
     elseif not (o and o.text and #o.text > 0) then fail(i, "objective was empty") end
 
+    -- The ball must never come to rest. This is the invariant every other one
+    -- here misses: a ball wedged in a pocket is not drained, not in transit
+    -- and not out of range, so the phase stays "play" and the score simply
+    -- stops. It was written after a ramp foot left an 18px gap against the
+    -- tip of a wall -- 0.7px wider than the ball, so core/geometry.lua's
+    -- throat check passed it -- and the ball sat in it for eight of these ten
+    -- minutes while every check above reported all clear.
+    --
+    -- The threshold is generous on both axes. A ball genuinely at rest reads
+    -- 0 px/s, and a ball creeping along a wall still clears 30; five seconds
+    -- is far longer than any legitimate slow roll and far shorter than the
+    -- eight minutes the real thing sat for.
+    do
+      local b = m.boards[m.state.active]
+      local moving = (m.state.phase ~= "play") or not b.ball or b:ball_speed() >= 30
+      if moving then still = 0 else still = still + 1 end
+      if still > worst_still then
+        worst_still = still
+        if still > 5 * C.TICK_HZ and not stalled then
+          local x, y = b:ball_pos()
+          stalled = ("board %s at (%.0f, %.0f)"):format(m.state.active, x or -1, y or -1)
+          fail(i, "the ball has been motionless for 5s: " .. stalled)
+        end
+      end
+    end
+
+    -- A ball on an elevated ramp is on a collision layer that cannot see the
+    -- playfield, so a ball that gets on one and never gets off is invisible
+    -- to every other invariant here: it is not drained, not in transit and
+    -- not stuck against anything. The longest single ride is the only thing
+    -- that would say so, and a full loop of Foundry's skyway takes about 4s.
+    for id, b in pairs(m.boards) do
+      if b.on_ramp then
+        ramp_ticks[id] = (ramp_ticks[id] or 0) + 1
+        if ramp_ticks[id] > worst_ride then worst_ride = ramp_ticks[id] end
+        if ramp_ticks[id] > 20 * C.TICK_HZ then
+          fail(i, ("%s: the ball has been on ramp %s for 20s"):format(id, b.on_ramp.id))
+          ramp_ticks[id] = 0
+        end
+      else
+        if (ramp_ticks[id] or 0) > 0 then rides = rides + 1 end
+        ramp_ticks[id] = 0
+      end
+    end
+
     if #m.feed > worst_feed then worst_feed = #m.feed end
     if i % 4000 == 0 then m:drain_events() end       -- a renderer draining
   end
@@ -126,6 +173,9 @@ return function()
   print("  time by phase: " .. table.concat(parts, "   "))
   print(("  peak feed %d (cap 96)   peak meter %d (cap %d)")
     :format(worst_feed, worst_meter, C.CHARGE_MAX))
+  print(("  ramp rides %d   longest %.1fs   longest stall %.2fs%s")
+    :format(rides, worst_ride / C.TICK_HZ, worst_still / C.TICK_HZ,
+            stalled and ("  <- " .. stalled) or ""))
   if #fails == 0 then
     print("  invariants: all held")
   else

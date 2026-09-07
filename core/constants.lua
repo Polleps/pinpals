@@ -31,6 +31,132 @@ C.BALL_DAMPING   = 0.05
 -- edges start to leak, energy-adding bumpers being the usual culprit.
 C.BALL_MAX_SPEED = 34 * C.METER      -- 2176 px/s = 9.1 px per fixed step
 
+-- Curves (core/curve.lua) ----------------------------------------------------
+-- Board geometry is authored with curve nodes and expanded into polylines at
+-- load time, so these decide how many straight segments a curve becomes.
+--
+-- CURVE_TOL is how far a chord may sag away from the true curve. Sub-pixel,
+-- because the boards are drawn at roughly 1:1 and a 1px flat spot on an arc
+-- is visible.
+C.CURVE_TOL      = 0.75
+-- ...and a floor on how short the chords may get. Two segments of a chain
+-- that are one segment apart sit exactly one chord from each other, so a
+-- curve tessellated finely enough starts to look, to core/geometry.lua's
+-- throat check, like a gap the ball cannot fit through. The floor plus that
+-- check's own along-the-chain exemption is what keeps a smooth curve from
+-- reading as a defect.
+C.CURVE_MIN_CHORD = 6
+-- Backstop against a typo'd radius turning one node into ten thousand edge
+-- fixtures. Nothing on either board comes close.
+C.CURVE_MAX_STEPS = 256
+-- The same backstop for Beziers, which subdivide rather than step: 2^10
+-- segments is far past any board and stops a degenerate control polygon from
+-- recursing until the stack gives out.
+C.CURVE_MAX_DEPTH = 10
+-- How much chain has to run between two segments before core/geometry.lua
+-- will call the gap between them a throat. Two segments one segment apart on
+-- a curve sit exactly one chord from each other, so without this every curve
+-- tighter than the chord floor reports itself as a wedge. Two ball diameters
+-- of chain is far less than any real throat -- the shipped one (board B's
+-- converging rails) was between two different polylines, which this cannot
+-- exempt at all -- and far more than a tessellation step.
+C.THROAT_RUN     = C.BALL_RADIUS * 4
+-- There is deliberately no margin on top of the ball's own width here, and it
+-- was tried. A ramp foot once left an 18.0px gap against the tip of a wall --
+-- 0.7px more than the ball is wide, so the check passed it -- and the soak
+-- found the ball parked in it for eight of ten minutes. Widening the bar to
+-- 1.25x caught that, and also flagged a 20.0px gap beside one of
+-- Glasshouse's targets that has never held anything in any soak.
+--
+-- The two cases are 2px apart and a width threshold cannot tell them apart,
+-- because what makes a gap a trap is not how narrow it is but whether it
+-- dead-ends. So the static check stays a lower bound -- a gap narrower than
+-- the ball is always wrong -- and the thing that catches a near miss is the
+-- stuck-ball invariant in tests/probe_soak.lua, which found this one.
+
+-- Ramps (core/ramp.lua) ------------------------------------------------------
+-- A ramp is a lane that climbs off the playfield, crosses over whatever is
+-- underneath it and comes down again. The ball is on one of two Box2D
+-- collision layers at any moment, so "over" and "under" are a real physical
+-- distinction and not a drawing trick.
+--
+-- What it costs to climb. The playfield is a plane tilted 6.5deg, and
+-- GRAVITY_PX is the component of gravity running down it; the far larger
+-- component presses the ball INTO that plane, and it is that one a ramp turns
+-- against the ball when the lane starts to rise. cot(6.5deg) is the ratio
+-- between them, so a 0.3 gradient fights the ball with 2.6x the force the
+-- open playfield ever does.
+--
+-- This is why a ramp needs a real shot rather than a dribble, and it is
+-- measured rather than tuned: it is the same tilt the gravity constant above
+-- was derived from, used consistently.
+C.PLAYFIELD_TILT = math.rad(6.5)
+C.RAMP_CLIMB_G   = C.GRAVITY_PX / math.tan(C.PLAYFIELD_TILT)
+-- How much ramp counts as its mouth: the run at each end within which a ball
+-- may get on or off. Wide enough that a ball crossing it in one 240Hz step at
+-- the speed ceiling (9.1px) cannot skip it, and short enough that it is
+-- unambiguously the entrance rather than the ramp.
+C.RAMP_MOUTH     = 26
+-- ...and the floor on how fast the ball has to be going INTO the mouth to
+-- commit to the climb. Mostly this is not the binding number: core/ramp.lua
+-- raises it per ramp to sqrt(2 * RAMP_CLIMB_G * height), the speed below
+-- which the ball provably cannot reach that ramp's crown.
+--
+-- That is the whole rule, and it was measured into existence. With a flat
+-- 192px/s threshold the ball entered Foundry's skyway 36 times in 120s and
+-- spent a third of its life on it -- almost all of them dribbles that climbed
+-- a few pixels and rolled straight back out, during which the ball is on the
+-- ramp layer and the playfield underneath it might as well not exist. A ramp
+-- you can fall into without being able to climb is a trap, not a lane.
+C.RAMP_ENTER_SPEED = 3 * C.METER
+-- There is deliberately no headroom multiplier on that budget. One was
+-- written -- the budget is frictionless and the ball is not -- and then
+-- measured away: sweeping it over 1.00..1.40 moved neither entries nor
+-- completions by a single shot on either board, because a flipper shot that
+-- reaches the skyway's mouth at all arrives at 1511-1622 px/s against a
+-- 1039 px/s gate. The climb is never what decides a shot here; the angle it
+-- arrives at is. tests/probe_skyway.lua has the distribution.
+-- The steepest gradient a ramp may be authored with. At 1.0 the climb costs
+-- nearly nine times playfield gravity, which no shot on either board can pay.
+C.RAMP_MAX_SLOPE = 0.60
+-- How much air a ramp needs under it before the ball can go beneath it.
+--
+-- A ramp is a solid object, not a decal: near its feet the lane is inches off
+-- the playfield and nothing can pass under it, and only once it has climbed
+-- clear does the space underneath open up. RAMP_DECK is the lane's own
+-- thickness, so the gap a ball has to fit through is the height minus that.
+--
+-- Without this the rails existed only on the ramp layer and a playfield ball
+-- walked straight through the side of a ramp resting on the floor, which is
+-- what makes the whole thing read as a drawing rather than a structure.
+C.RAMP_DECK      = 4
+C.RAMP_CLEARANCE = C.BALL_RADIUS * 2 + C.RAMP_DECK
+-- Where the ramp is too low to duck under, its sides are solid and its lane
+-- is closed off by a wall slanted across it. Slanted, not square: a ball that
+-- did not make the climb has to be sent back down the lane, and a square wall
+-- at the end of a channel two rails wide is a pocket to rest in. This is how
+-- far the two ends of that wall are offset along the lane, either side of
+-- where the ramp lifts clear.
+C.RAMP_BACKSTOP  = 20
+
+-- Offset rails pinch to nothing on the outside of a hard corner without a
+-- miter, and run away to infinity with an unclamped one. A ramp that turns
+-- this hard is a defect core/geometry.lua reports; the clamp only stops the
+-- picture exploding before the message arrives.
+C.RAMP_MITER_MAX = 3
+-- Presentation: where the light is, so a ramp's shadow says how high it is.
+-- Down and to the right, matching nothing in particular -- it only has to be
+-- consistent across both boards for height to read at a glance.
+C.RAMP_SHADOW_X  = 0.45
+C.RAMP_SHADOW_Y  = 0.62
+-- How finely the drawn lane is cut across, in pixels of ramp. The gradient
+-- and the shadow's shear both follow the height profile, and the profile
+-- climbs over ~80px inside path segments that can be 270px long -- so
+-- colouring at the path's own vertices puts the whole climb into one linear
+-- blend and leaves a seam where the segment ends. Cutting the strip finer
+-- than the climb is the fix; it costs vertices in a mesh built once.
+C.RAMP_MESH_STEP = 8
+
 -- §4.1 Fixed timestep --------------------------------------------------------
 C.TICK_HZ        = 240
 C.FIXED_DT       = 1 / C.TICK_HZ

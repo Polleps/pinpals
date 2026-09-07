@@ -6,6 +6,7 @@ local C       = require("core.constants")
 local intents = require("core.intents")
 local score   = require("core.score")
 local geo     = require("core.geometry")
+local ramps   = require("core.ramp")
 local objective = require("core.objective")
 local inspect = require("app.inspect")
 
@@ -215,6 +216,143 @@ local function draw_incoming(def, u)
   lg.line(e.x, e.y, e.x + e.dir.x * 34, e.y + e.dir.y * 34)
   lg.setColor(0.6, 1, 0.75, 0.25 + 0.6 * u)
   lg.circle("fill", e.x, e.y, 4 + 3 * u)
+end
+
+---------------------------------------------------------------------------
+-- Ramps
+---------------------------------------------------------------------------
+
+--- A ramp is drawn as two triangle strips: the lane itself, and the shadow it
+--- throws on the playfield below.
+---
+--- Both carry the gradient in their VERTEX COLOURS rather than in a shader or
+--- a stack of translucent polygons, because the thing being drawn genuinely
+--- is a value that varies along the strip -- how high the ramp is there.
+--- Height is the only cue the player has for which lane the ball is in, so it
+--- has to be visible everywhere along the ramp and not just at the ends.
+---
+--- The shadow is the same strip displaced by z * the light direction, so it
+--- shears away from the ramp exactly where the ramp climbs and rejoins it at
+--- the feet. That shear is what makes the height read as height rather than
+--- as a colour ramp.
+---
+--- Built once per board definition. Definitions are immutable and a hot
+--- reload replaces the whole table, so identity is a sound cache key -- the
+--- same reason app/inspect.lua caches its point list that way.
+--- Keyed by the definition table itself, and weakly, so a hot reload's new
+--- board simply misses and the old one's meshes go with it. A single-slot
+--- cache would thrash: both boards are drawn every frame.
+local mesh_cache = setmetatable({}, { __mode = "k" })
+
+local function ramp_meshes(def, th)
+  local out = {}
+  for _, r in ipairs(def.ramps or {}) do
+    local g = r.geom
+    local surface, shadow = {}, {}
+
+    --- One rung of the ladder: the two rail points at arclength `s`, coloured
+    --- and displaced by how high the ramp is there.
+    local function rung(s, lx, ly, rx, ry)
+      local z = ramps.height_at(g, s)
+      local u = (g.height > 0) and (z / g.height) or 0
+      local sx, sy = z * C.RAMP_SHADOW_X, z * C.RAMP_SHADOW_Y
+      local lift = 0.40 + 0.60 * u
+      -- Opaque enough to read as a floor the ball runs on rather than a
+      -- tint over the playfield: at the feet it is nearly flush with the
+      -- board and stays faint, and by the crown it hides most of what it
+      -- crosses. Never fully opaque -- a ball travelling underneath still
+      -- has to be findable, which is the whole point of the space a ramp
+      -- frees up.
+      local a = 0.34 + 0.48 * u
+      for _, p in ipairs({ { lx, ly }, { rx, ry } }) do
+        surface[#surface+1] = {
+          p[1], p[2], 0, 0,
+          th.wall[1] * lift, th.wall[2] * lift, th.wall[3] * lift, a,
+        }
+        shadow[#shadow+1] = { p[1] + sx, p[2] + sy, 0, 0, 0, 0, 0, 0.06 + 0.44 * u }
+      end
+    end
+
+    -- Cut across the lane every RAMP_MESH_STEP pixels of ramp rather than at
+    -- the path's own vertices. The rungs stay exactly on the rails -- they
+    -- are linear interpolations along one rail segment -- so the drawn edge
+    -- still matches the physics edge, but the gradient and the shadow's
+    -- shear now follow the height profile instead of a straight blend across
+    -- whatever the tessellation happened to produce.
+    local last_k = #g.path / 2 - 1
+    for k = 1, last_k do
+      local s0, s1 = g.cum[k], g.cum[k+1]
+      local n = math.max(1, math.ceil((s1 - s0) / C.RAMP_MESH_STEP))
+      local stop = (k == last_k) and n or (n - 1)
+      for i = 0, stop do
+        local t = i / n
+        rung(s0 + (s1 - s0) * t,
+             lerp(g.left[k*2-1],  g.left[k*2+1],  t),
+             lerp(g.left[k*2],    g.left[k*2+2],  t),
+             lerp(g.right[k*2-1], g.right[k*2+1], t),
+             lerp(g.right[k*2],   g.right[k*2+2], t))
+      end
+    end
+
+    out[#out+1] = {
+      ramp    = r,
+      surface = love.graphics.newMesh(surface, "strip", "static"),
+      shadow  = love.graphics.newMesh(shadow,  "strip", "static"),
+    }
+  end
+  return out
+end
+
+local function meshes_for(def, th)
+  local m = mesh_cache[def]
+  if not m then
+    m = ramp_meshes(def, th)
+    mesh_cache[def] = m
+  end
+  return m
+end
+
+--- Everything that is cast on the playfield floor, drawn before the geometry
+--- that casts it. The ball's own shadow is here too rather than next to the
+--- ball: a shadow drawn after the ramp would lie ON the ramp, which is the one
+--- place it certainly is not.
+local function draw_shadows(ctx, th)
+  for _, m in ipairs(meshes_for(ctx.def, th)) do
+    love.graphics.setColor(1, 1, 1, ctx.dim)
+    love.graphics.draw(m.shadow)
+  end
+  local ball = ctx.snap.ball
+  if ball and (ball.z or 0) > 0.5 then
+    local bx = ilerp(ctx.prev and ctx.prev.ball and ctx.prev.ball.x, ball.x, ctx.alpha)
+    local by = ilerp(ctx.prev and ctx.prev.ball and ctx.prev.ball.y, ball.y, ctx.alpha)
+    local z  = ilerp(ctx.prev and ctx.prev.ball and ctx.prev.ball.z, ball.z, ctx.alpha)
+    love.graphics.setColor(0, 0, 0, 0.45 * ctx.dim)
+    love.graphics.circle("fill", bx + z * C.RAMP_SHADOW_X, by + z * C.RAMP_SHADOW_Y,
+                         C.BALL_RADIUS * 0.92)
+  end
+end
+
+--- The lanes themselves, over the playfield they cross. Translucent on
+--- purpose: a ball running underneath a ramp has to stay visible, or the
+--- space a ramp frees up is space the player cannot see into.
+local function draw_ramps(ctx, th)
+  for _, m in ipairs(meshes_for(ctx.def, th)) do
+    love.graphics.setColor(ctx.dim, ctx.dim, ctx.dim, 1)
+    love.graphics.draw(m.surface)
+    local g = m.ramp.geom
+    love.graphics.setLineWidth(2)
+    love.graphics.setColor(th.wall[1] * ctx.dim, th.wall[2] * ctx.dim,
+                           th.wall[3] * ctx.dim, 0.75)
+    for _, rail in ipairs({ g.left, g.right }) do love.graphics.line(rail) end
+    -- The skirt: where the ramp is too low to duck under, its sides and the
+    -- wall across its lane are solid to a ball on the playfield. Drawn at
+    -- full wall weight because that is exactly what they are -- a ball can
+    -- come off them, and anything it can come off has to look like it can.
+    love.graphics.setLineWidth(3)
+    love.graphics.setColor(th.wall[1] * ctx.dim, th.wall[2] * ctx.dim,
+                           th.wall[3] * ctx.dim, 1)
+    for _, poly in ipairs(g.skirt) do love.graphics.line(poly) end
+  end
 end
 
 --- One board, drawn in its own space. Split out of a 181-line draw_board
@@ -518,10 +656,25 @@ local function draw_board(def, snap, prev, alpha, view, active, heat, incoming, 
   love.graphics.rectangle("fill", 0, 0, def.size.w, def.size.h, 8)
 
   -- The post parks below the playfield when retracted (that is what "sinks
-  -- into the floor" means in the data), so clip to the board.
-  love.graphics.setScissor(view.x, view.y, def.size.w * view.s, def.size.h * view.s)
+  -- into the floor" means in the data), so clip to the board -- widened to
+  -- the left, right and top by however far the ramps hang off the edge,
+  -- because a ramp is above the playfield rather than on it and the board's
+  -- rectangle is not its boundary.
+  --
+  -- The BOTTOM edge is deliberately not widened. That clip is the only thing
+  -- hiding the parked post and guards, and a ramp reaching below the drain
+  -- line would take them with it. A ramp under the flippers is not a shape
+  -- any board wants; the parked furniture staying parked is.
+  local sx0, sy0, sx1 = 0, 0, def.size.w
+  local rx0, ry0, rx1 = ramps.board_bounds(def)
+  if rx0 then
+    sx0, sy0, sx1 = math.min(0, rx0), math.min(0, ry0), math.max(def.size.w, rx1)
+  end
+  love.graphics.setScissor(view.x + sx0 * view.s, view.y + sy0 * view.s,
+                           (sx1 - sx0) * view.s, (def.size.h - sy0) * view.s)
 
   draw_drain_line(ctx)
+  draw_shadows(ctx, th)
   draw_walls(ctx, th)
   draw_bumpers(ctx)
   draw_slingshots(ctx)
@@ -531,6 +684,10 @@ local function draw_board(def, snap, prev, alpha, view, active, heat, incoming, 
   draw_devices(ctx)
   draw_guards(ctx)
   draw_flippers(ctx)
+  -- The ramps go over everything they cross, and the ball goes over them:
+  -- a ball underneath one still has to be findable, which is what the
+  -- translucent lane is for.
+  draw_ramps(ctx, th)
   draw_effects_and_ball(ctx)
 
   love.graphics.setScissor()

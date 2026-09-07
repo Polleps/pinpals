@@ -38,10 +38,35 @@ local function point(out, x, y, tag, kind)
   out[#out+1] = { x = x, y = y, tag = tag, kind = kind or "vertex" }
 end
 
+--- The x,y pairs a human actually typed for a path.
+---
+--- Since core/curve.lua, `walls[i]` and `ramps[i].path` may have been expanded
+--- from curve nodes into a hundred tessellated points, with the authored form
+--- kept on `.spec`. This mode's rule is that it labels exactly the numbers
+--- that appear in data/tables/*.lua and no others, so a curve gets its control
+--- points labelled and not the arithmetic that came out of it -- a generated
+--- vertex appears nowhere in the file and would send you looking for something
+--- nobody wrote.
+local function authored(path)
+  local src = path.spec or path
+  local pts, pend = {}, nil
+  for _, v in ipairs(src) do
+    if type(v) == "number" then
+      if pend then
+        pts[#pts+1] = { pend, v }
+        pend = nil
+      else
+        pend = v
+      end
+    end
+  end
+  return pts
+end
+
 local function collect_polylines(def, out)
   for i, poly in ipairs(def.walls or {}) do
-    for j = 1, #poly - 1, 2 do
-      point(out, poly[j], poly[j + 1], ("walls[%d][%d]"):format(i, (j + 1) / 2))
+    for j, pt in ipairs(authored(poly)) do
+      point(out, pt[1], pt[2], ("walls[%d][%d]"):format(i, j))
     end
   end
   for i, sling in ipairs(def.slingshots or {}) do
@@ -88,6 +113,24 @@ local function collect_devices(def, out)
   end
 end
 
+--- A ramp is a centreline plus four numbers that decide what it costs to
+--- shoot, and the four are as load-bearing as the coordinates: the entry
+--- window is the width narrowed by a ball radius, and the gate at the mouth
+--- is computed from the crown height. So the first point carries them.
+local function collect_ramps(def, out)
+  for i, r in ipairs(def.ramps or {}) do
+    for j, pt in ipairs(authored(r.path)) do
+      local tag = ("ramps[%d].path[%d]"):format(i, j)
+      if j == 1 then
+        tag = ("%s  %s  w%s  crown %s  slope %s/%s")
+          :format(tag, r.id, num(r.width), num(r.height),
+                  num(r.entry_slope), num(r.exit_slope))
+      end
+      point(out, pt[1], pt[2], tag)
+    end
+  end
+end
+
 local function collect_points(def, out)
   local m = def.tube and def.tube.mouth
   if m then point(out, m.x, m.y, ("tube.mouth  r%s -> %s"):format(num(m.r), def.tube.to), "centre") end
@@ -101,6 +144,7 @@ end
 local function collect(def)
   local out = {}
   collect_polylines(def, out)
+  collect_ramps(def, out)
   collect_content(def, out)
   collect_devices(def, out)
   collect_points(def, out)

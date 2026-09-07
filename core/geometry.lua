@@ -8,11 +8,18 @@
 ---
 --- Pure Lua. No love.* here.
 
-local C = require("core.constants")
+local C    = require("core.constants")
+local ramp = require("core.ramp")
 
 local M = {}
 
 local BALL_D = C.BALL_RADIUS * 2
+-- The throat check's bar is the ball's own width and nothing more, which
+-- makes it a lower bound rather than a guarantee: a gap a shade wider than
+-- the ball still passes here and can still hold the ball if it dead-ends.
+-- See the note at C.THROAT_MIN for why no margin is added, and what does
+-- catch that case.
+local THROAT = BALL_D
 
 ---------------------------------------------------------------------------
 -- Small geometry helpers
@@ -104,14 +111,43 @@ local function norm(a)
 end
 
 --- Flatten every polyline into a list of segments.
+---
+--- `s0` and `len` are how far along its own chain each segment starts and how
+--- long it is. The throat check needs them: since curves became polylines,
+--- two segments a few chords apart on one smooth arc are legitimately closer
+--- together than the ball is wide, and the only thing separating that from a
+--- real throat is how much chain runs between them.
 local function segments_of(board)
   local segs = {}
-  for pi, poly in ipairs(board.walls or {}) do
+  local function chain(poly, pi, label, ramp_id)
+    local run = 0
     for i = 1, #poly - 3, 2 do
+      local len = math.sqrt((poly[i+2] - poly[i])^2 + (poly[i+3] - poly[i+1])^2)
       segs[#segs+1] = {
         ax = poly[i], ay = poly[i+1], bx = poly[i+2], by = poly[i+3],
-        poly = pi, index = (i + 1) / 2, label = "wall " .. pi,
+        poly = pi, index = (i + 1) / 2, label = label, ramp = ramp_id,
+        s0 = run, len = len,
       }
+      run = run + len
+    end
+  end
+  for pi, poly in ipairs(board.walls or {}) do
+    chain(poly, pi, "wall " .. pi)
+  end
+  -- A ramp's skirt -- the rails and the slanted closure where the lane is too
+  -- low to duck under -- is solid to a playfield ball, so every rule a wall
+  -- obeys applies to it: it can wedge against a target, jam a flipper or make
+  -- a bowl, and it is generated rather than typed, which is exactly why it
+  -- has to be checked rather than trusted.
+  --
+  -- `poly` is deliberately shared across one ramp's pieces and negative, so
+  -- the throat check's along-the-chain exemption cannot mistake two separate
+  -- rails for one continuous run.
+  for ri, r in ipairs(board.ramps or {}) do
+    if r.geom then
+      for k, poly in ipairs(r.geom.skirt) do
+        chain(poly, -ri, ("ramp %s skirt %d"):format(r.id, k), r.id)
+      end
     end
   end
   return segs
@@ -264,11 +300,20 @@ end
 --- caught the ball 19 times in 182 drops -- they never actually crossed, which
 --- is why "do any walls intersect?" would not have found it.
 local function check_wedges(board, segs, out)
+  -- Two segments are exempt when they meet at a shared vertex -- including
+  -- across two chains, which is how board A's ramp walls join its roof -- or
+  -- when too little chain runs between them for the gap to be a throat rather
+  -- than a curve. See C.THROAT_RUN for why the second rule exists.
   local function adjacent(a, b)
     local pts = { {a.ax,a.ay}, {a.bx,a.by} }
     for _, p in ipairs(pts) do
       if (math.abs(p[1]-b.ax) < 0.5 and math.abs(p[2]-b.ay) < 0.5)
       or (math.abs(p[1]-b.bx) < 0.5 and math.abs(p[2]-b.by) < 0.5) then return true end
+    end
+    if a.poly == b.poly and a.s0 and b.s0 then
+      local first, second = a, b
+      if second.s0 < first.s0 then first, second = b, a end
+      if second.s0 - (first.s0 + first.len) <= C.THROAT_RUN then return true end
     end
     return false
   end
@@ -278,7 +323,7 @@ local function check_wedges(board, segs, out)
       local a, b = segs[i], segs[j]
       if not adjacent(a, b) then
         local d = seg_seg(a.ax,a.ay,a.bx,a.by, b.ax,b.ay,b.bx,b.by)
-        if d < BALL_D then
+        if d < THROAT then
           local _, qx, qy = point_seg(b.ax, b.ay, a.ax, a.ay, a.bx, a.by)
           out[#out+1] = {
             kind = "wedge", x = qx, y = qy,
@@ -294,7 +339,7 @@ local function check_wedges(board, segs, out)
   for bi, bump in ipairs(board.bumpers or {}) do
     for _, s in ipairs(segs) do
       local d = (point_seg(bump.x, bump.y, s.ax, s.ay, s.bx, s.by)) - bump.r
-      if d < BALL_D then
+      if d < THROAT then
         out[#out+1] = {
           kind = "wedge", x = bump.x, y = bump.y,
           msg = ("bumper %d sits %.1fpx from wall %d; the ball is %.1fpx wide")
@@ -305,7 +350,7 @@ local function check_wedges(board, segs, out)
     for bj = bi + 1, #board.bumpers do
       local o = board.bumpers[bj]
       local d = math.sqrt((bump.x-o.x)^2 + (bump.y-o.y)^2) - bump.r - o.r
-      if d < BALL_D then
+      if d < THROAT then
         out[#out+1] = {
           kind = "wedge", x = bump.x, y = bump.y,
           msg = ("bumpers %d and %d are %.1fpx apart; the ball is %.1fpx wide")
@@ -335,7 +380,7 @@ local function check_wedges(board, segs, out)
     for _, ed in ipairs(outline(sol)) do
       for _, w in ipairs(segs) do
         local d = seg_seg(ed[1], ed[2], ed[3], ed[4], w.ax, w.ay, w.bx, w.by)
-        if d < BALL_D then
+        if d < THROAT then
           out[#out+1] = {
             kind = "wedge", x = sol.x, y = sol.y,
             msg = ("%s sits %.1fpx from %s; the ball is %.1fpx wide")
@@ -359,7 +404,7 @@ local function check_wedges(board, segs, out)
                                         e2[1], e2[2], e2[3], e2[4]))
         end
       end
-      if best < BALL_D then
+      if best < THROAT then
         out[#out+1] = {
           kind = "wedge", x = sol.x, y = sol.y,
           msg = ("%s and %s are %.1fpx apart; the ball is %.1fpx wide")
@@ -372,7 +417,7 @@ local function check_wedges(board, segs, out)
     for bi, bump in ipairs(board.bumpers or {}) do
       for _, ed in ipairs(outline(sol)) do
         local d = (point_seg(bump.x, bump.y, ed[1], ed[2], ed[3], ed[4])) - bump.r
-        if d < BALL_D then
+        if d < THROAT then
           out[#out+1] = {
             kind = "wedge", x = sol.x, y = sol.y,
             msg = ("%s sits %.1fpx from bumper %d; the ball is %.1fpx wide")
@@ -449,6 +494,108 @@ local function check_devices(board, segs, out)
           msg = ("%s: retracted it still reaches y=%.0f, above the drain line at %.0f")
                 :format(d.id, d.down.y - d.h/2, board.drain_y),
         }
+      end
+    end
+  end
+end
+
+---------------------------------------------------------------------------
+-- 5. Ramps
+---------------------------------------------------------------------------
+
+--- Is (px, py) inside the convex quad given as eight numbers?
+local function in_quad(q, px, py)
+  local sign
+  for i = 1, 8, 2 do
+    local ax, ay = q[i], q[i+1]
+    local bx, by = q[(i + 1) % 8 + 1], q[(i + 2) % 8 + 1]
+    local c = cross(ax, ay, bx, by, px, py)
+    if math.abs(c) > 1e-9 then
+      local s = c > 0
+      if sign == nil then sign = s elseif sign ~= s then return false end
+    end
+  end
+  return true
+end
+
+--- The rectangle covering one mouth of a ramp: the stretch of lane a ball
+--- has to be standing in to get on or off there, as a quad.
+local function mouth_quad(g, which)
+  local s0, s1 = ramp.mouth(g, which)
+  local half = g.width / 2
+  local x0, y0, tx0, ty0 = ramp.point_at(g, s0)
+  local x1, y1, tx1, ty1 = ramp.point_at(g, s1)
+  return {
+    x0 - ty0 * half, y0 + tx0 * half,
+    x1 - ty1 * half, y1 + tx1 * half,
+    x1 + ty1 * half, y1 - tx1 * half,
+    x0 + ty0 * half, y0 - tx0 * half,
+  }
+end
+
+--- Two things about an elevated ramp are invisible until a ball is on one.
+---
+--- 1. A ramp that turns tighter than it is wide folds its inner rail back
+---    through itself. On screen that is a small kink; in the physics it is a
+---    pocket the ball cannot leave, on a layer where nothing else can reach
+---    it either.
+---
+--- 2. A mouth has to open onto clear playfield. Coming off a ramp is the one
+---    moment the ball changes which geometry it can see, and if a wall runs
+---    through the mouth the ball reappears INSIDE it -- the solver then
+---    ejects it in whatever direction it likes, which reads as the ball
+---    teleporting. Entering has no such hazard, because a ball on the
+---    playfield is by definition not inside a wall already.
+local function check_ramps(board, segs, out)
+  for _, r in ipairs(board.ramps or {}) do
+    local g = r.geom
+    if g then
+      local path = g.path
+      for _, side in ipairs({ "left", "right" }) do
+        local rail = g[side]
+        for i = 1, #rail - 3, 2 do
+          local rx, ry = rail[i+2] - rail[i], rail[i+3] - rail[i+1]
+          local cx, cy = path[i+2] - path[i], path[i+3] - path[i+1]
+          if rx * cx + ry * cy < 0 then
+            out[#out+1] = {
+              kind = "ramp-pinch", x = path[i], y = path[i+1],
+              msg = ("ramp %s turns tighter than its %gpx width near (%.0f, %.0f): the %s rail folds back on itself")
+                    :format(r.id, g.width, path[i], path[i+1], side),
+            }
+            break
+          end
+        end
+      end
+
+      for _, which in ipairs({ "start", "end" }) do
+        if ramp.admits(g, which) then
+          local q = mouth_quad(g, which)
+          local worst, at
+          for _, w in ipairs(segs) do
+            -- A ramp's own skirt runs along the sides of its own mouth by
+            -- construction, so it is the one wall that being there is not a
+            -- defect. Every other wall, this ramp's or another's, still is.
+           if w.ramp ~= r.id then
+            local d = math.huge
+            for k = 1, 8, 2 do
+              local j = (k + 1) % 8 + 1
+              d = math.min(d, seg_seg(q[k], q[k+1], q[j], q[j+1],
+                                      w.ax, w.ay, w.bx, w.by))
+            end
+            if in_quad(q, (w.ax + w.bx) / 2, (w.ay + w.by) / 2) then d = 0 end
+            if d < (worst or math.huge) then worst, at = d, w end
+           end
+          end
+          if worst and worst < C.BALL_RADIUS then
+            local s0 = select(1, ramp.mouth(g, which))
+            local mx, my = ramp.point_at(g, s0)
+            out[#out+1] = {
+              kind = "ramp-mouth", x = mx, y = my,
+              msg = ("ramp %s: its %s mouth is %.1fpx from %s, so a ball coming off there lands inside it")
+                    :format(r.id, which, worst, at.label),
+            }
+          end
+        end
       end
     end
   end
@@ -558,6 +705,7 @@ function M.check(board)
   check_wedges(board, segs, out)
   check_devices(board, segs, out)
   check_guards(board, segs, out)
+  check_ramps(board, segs, out)
   table.sort(out, function(a, b)
     if a.kind ~= b.kind then return a.kind < b.kind end
     return (a.x + a.y * 1e-3) < (b.x + b.y * 1e-3)

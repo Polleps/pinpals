@@ -38,7 +38,10 @@ function Match:_snapshot(id)
   local b = self.boards[id]
   local snap = { flippers = {}, devices = {}, guards = {} }
   local x, y = b:ball_pos()
-  if x then snap.ball = { x = x, y = y } end
+  -- z is how high the ball is riding: zero on the playfield, and up to a
+  -- ramp's crown height on one. app/ draws the shadow from it; core/ never
+  -- sees it, because no rule on either board cares how high the ball is.
+  if x then snap.ball = { x = x, y = y, z = b:ball_z() } end
   for side, f in pairs(b.flippers) do snap.flippers[side] = f.body:getAngle() end
   for did, dev in pairs(b.devices) do
     if dev.kind == "gate" then

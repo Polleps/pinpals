@@ -183,9 +183,9 @@ return {
   -- third digit, which for this board is as repeatable as a number gets.
   bumpers    = {
     { x = 224, y = 112, r = 22, restitution = 1.15 }, -- north
-    { x = 146, y = 190, r = 22, restitution = 1.15 }, -- west
-    { x = 224, y = 268, r = 22, restitution = 1.15 }, -- south
-    { x = 302, y = 190, r = 22, restitution = 1.15 }, -- east
+    { x = 157, y = 210, r = 22, restitution = 1.15 }, -- west
+    -- { x = 224, y = 268, r = 22, restitution = 1.15 }, -- south
+    { x = 292, y = 210, r = 22, restitution = 1.15 }, -- east
   },
 
   -- §6.2 "the wall that guards the outlane", and the answer to the outlanes
@@ -321,21 +321,103 @@ return {
     },
   },
 
+
+  -- The skyway: the first elevated ramp on either board, and the thing that
+  -- makes "elevated" mean something. It leaves the left orbit at (94,570),
+  -- climbs, crosses the board over the west and east bumpers -- which stay
+  -- live underneath it -- and comes back down into the right orbit at
+  -- (347,570). Shootable from either end.
+  --
+  -- Where the feet go was not a choice, it was what survived. A ramp foot is
+  -- a SOLID structure (core/ramp.lua's skirt): where the lane is still too
+  -- low for a ball to duck under, its sides are walls and a slanted wall
+  -- closes the lane between them. That makes a foot a 54 x 71px block sitting
+  -- in a lane, and both boards are nearly full at the height a foot needs.
+  -- Four separate constraints closed in on these numbers:
+  --
+  --   * y=570 is as high as the feet can go. Below that the mouths are too
+  --     close to the flippers for a shot to have spread out sideways enough
+  --     to find them -- the same 300px the pass ramp's own note records --
+  --     and swept shots reaching the mouth fall off a cliff: 10/140 at y=570,
+  --     2/140 at y=595, 0/140 at y=620.
+  --   * ...and as low as they can go on Glasshouse, whose target row sits at
+  --     y=476..485. A foot any lower puts its skirt inside the bank.
+  --   * x=94 clears Glasshouse's plunger lane (it serves up x=48) and stays
+  --     left of its ramp channel. At 56 the foot sat ON that lane and every
+  --     serve went up the ramp at 1050px/s.
+  --   * x=347 is the one that had to give. Foundry and Glasshouse want
+  --     DIFFERENT right feet -- 347 here, 353 there -- because Foundry's
+  --     lower-right is bounded by wall 5's tip at (289,560) and Glasshouse's
+  --     by the gap between its two vault targets, and the two windows do not
+  --     overlap. So the boards no longer carry an identical loop, and the
+  --     note that said they did is gone rather than quietly wrong.
+  --
+  -- x=334 also passed every static gate, with an 18.0px gap against wall 5's
+  -- tip -- 0.7px wider than the ball. The soak found the ball parked in it,
+  -- motionless, for eight of ten minutes. That is where the stuck-ball
+  -- invariant in tests/probe_soak.lua comes from, and why 347 leaves 31px.
+  --
+  -- What it costs to make. The climb is fought by C.RAMP_CLIMB_G and the
+  -- 380px it travels up-board by ordinary gravity, so a shot has to arrive at
+  -- the mouth with
+  --
+  --     sqrt(2 * (6179*30 + 704*380)) = 952 px/s
+  --
+  -- and core/ramp.lua turns everyone slower away rather than swallowing them.
+  -- That is the whole reason the gate exists: admitting shots that cannot
+  -- climb turned both orbits into dead ends, measured at the time as
+  -- Foundry's east bumper going from 40 hits in eight minutes to zero.
+  --
+  -- As shipped: 11 of 140 swept flipper shots reach a mouth on Foundry and 4
+  -- of 140 on Glasshouse, and ALL of them complete the loop. 100% is what a
+  -- gate computed from the ramp's own energy budget produces, and it is a
+  -- real trade -- there is no rattling a ramp here, you either had the shot
+  -- or you never got on. tests/probe_skyway.lua is that measurement.
+  --
+  -- The corners are `round` nodes (core/curve.lua): the path is authored as
+  -- the three straight runs it obviously is, and the two 110px fillets are
+  -- what stop the ball meeting a corner it cannot take.
+  ramps   = {
+    {
+      id          = "skyway",
+      path        = { 94, 570,
+        94, 190, { round = 110 },
+        347, 190, { round = 110 },
+        347, 570 },
+      -- 54px of lane against a 17.3px ball, swept rather than chosen. The
+      -- entry window is the lane narrowed by a ball radius -- core/ramp.lua
+      -- will not close the rails around a ball already overlapping one -- so
+      -- a wider lane admits shallower shots, and on the sweep that chose this
+      -- (38/46/54/62/70) Foundry's completion collapsed from 55% to 7% above
+      -- 54 while reaching the mouth got no easier. 54 was the only width both
+      -- boards could reach and complete.
+      --
+      -- The sweep predates the solid skirt and the entry gate that followed
+      -- it, so treat the number as inherited rather than current: re-run
+      -- tests/probe_skyway.lua before moving it.
+      width       = 54,
+      height      = 30,
+      entry_slope = 0.58,
+      exit_slope  = 0.58,
+      enter       = "both",
+    },
+  },
+
   -- §5 The link.
   -- The mouth sits directly above the ramp exit, so clearing the gate is the
   -- pass. The right orbit is the plunger lane and the way back down.
   -- §7 Cross-board state. Foundry is the charging board: the chaos here is
   -- worth little on its own (24 points/s) but it fills the vault waiting on
   -- Glasshouse. You play A to prepare B.
-  links      = {
+  links   = {
     { when = "bumper", charges = { board = "b", meter = "vault" } },
   },
 
-  tube       = { mouth = { x = 236, y = 398, r = 14 }, to = "b" },
-  entry      = { x = 90, y = 116, dir = { x = -0.20, y = 1 } },
+  tube    = { mouth = { x = 236, y = 398, r = 14 }, to = "b" },
+  entry   = { x = 90, y = 116, dir = { x = -0.20, y = 1 } },
   -- Served into the open right field, clear of the lane furniture: a real
   -- shooter lane is phase 5, and a serve inside a 26px outlane rattles.
-  serve      = { x = 400, y = 660, dir = { x = 0, y = -1 } },
+  serve   = { x = 400, y = 660, dir = { x = 0, y = -1 } },
 
-  drain_y    = 940,
+  drain_y = 940,
 }

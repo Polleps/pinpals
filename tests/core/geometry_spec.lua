@@ -5,6 +5,8 @@
 return function(H)
   local describe, it, A = H.describe, H.it, H.assert
   local geo    = require("core.geometry")
+  local rampmod = require("core.ramp")
+  local curve  = require("core.curve")
   local boards = require("data.tables.init").load()
 
   local function copy(v)
@@ -31,6 +33,41 @@ return function(H)
     it("is clean", function()
       local clean, lines = geo.report(boards)
       A.truthy(clean, "\n  " .. table.concat(lines, "\n  "))
+    end)
+  end)
+
+  describe("elevated ramps", function()
+    --- Board A with its skyway replaced by a deliberately broken one.
+    local function ramped(over)
+      local b = copy(boards.a)
+      for k, v in pairs(over) do b.ramps[1][k] = v end
+      rampmod.prepare(b)          -- geom is derived, and copy() copied the old one
+      return b
+    end
+
+    it("catches a ramp that turns tighter than it is wide", function()
+      -- A 12px fillet on a 54px lane puts the inner rail at radius -15: it
+      -- folds back through the centreline into a pocket on a layer nothing
+      -- else can reach. On screen it is a small kink.
+      local path = curve.flatten(
+        { 60, 560, 60, 200, { round = 12 }, 380, 200, { round = 12 }, 380, 560 }, "p")
+      A.truthy(path, "the fixture path did not expand")
+      A.truthy(kinds(ramped({ path = path or {} }))["ramp-pinch"],
+        "the folded rail was not reported")
+    end)
+
+    it("catches a mouth with a wall running through it", function()
+      -- Coming off a ramp is the one moment the ball changes which geometry
+      -- it can see. A wall in the mouth means it reappears inside that wall
+      -- and the solver ejects it wherever it likes.
+      A.truthy(kinds(ramped({ path = { 10, 560, 10, 200 } }))["ramp-mouth"],
+        "a mouth sitting on the shell was not reported")
+    end)
+
+    it("does not report the shipped skyway as either", function()
+      local found = kinds(boards.a)
+      A.falsy(found["ramp-pinch"], "the shipped ramp reported a pinch")
+      A.falsy(found["ramp-mouth"], "the shipped ramp reported a blocked mouth")
     end)
   end)
 

@@ -284,6 +284,37 @@ return {
     },
   },
 
+
+  -- The skyway. board_a.lua carries the note on what this ramp is, what it
+  -- costs to shoot, and why a ramp FOOT is a solid block rather than a mark
+  -- on the floor.
+  --
+  -- The right foot is at x=353 where Foundry's is at 347, and that 6px is the
+  -- reason the two boards no longer carry the same loop. Glasshouse's vault
+  -- targets sit at x=286..314 and x=338..366, and the topmost corner of the
+  -- foot's skirt has to thread the 24px gap between them: anywhere outside
+  -- x=324..328 and the skirt is within a ball's width of a standup. Foundry's
+  -- window is set by wall 5's tip instead, and the two do not overlap.
+  --
+  -- Glasshouse has no bumpers for the skyway to cross, but the elevated part
+  -- of it runs directly over the vault target at (352,480), which stays
+  -- reachable underneath -- the whole point of an elevated lane, and the one
+  -- thing CLAUDE.md's stacking rule could not previously allow.
+  ramps = {
+    {
+      id          = "skyway",
+      path        = { 94, 570,
+                      94, 190, { round = 110 },
+                      354, 190, { round = 110 },
+                      354, 570 },
+      width       = 54,
+      height      = 30,
+      entry_slope = 0.58,
+      exit_slope  = 0.58,
+      enter       = "both",
+    },
+  },
+
   -- §7 Cross-board state, the return half. Clearing the vault cashes the
   -- charge Foundry built, and lights Foundry's bumpers on the way back -- so
   -- arriving on a board you prepared feels like coming home to something.

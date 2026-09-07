@@ -113,6 +113,7 @@ local THEME_HIT = {
   bumper  = { 1.00, 0.90, 0.35 },
   sling   = { 1.00, 0.55, 0.80 },
   guard   = { 0.55, 0.95, 1.00 },
+  rampwall = { 1.00, 0.78, 0.45 },
 }
 
 local function on_impact(ev, defs)

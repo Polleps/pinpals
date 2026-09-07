@@ -4,6 +4,8 @@
 --- a nil index somewhere inside sim/.
 --- Pure Lua. No love.* here.
 
+local C = require("core.constants")
+
 local M = {}
 
 local function isnum(v) return type(v) == "number" and v == v end
@@ -208,6 +210,83 @@ function M.board(b)
     end
   end
 
+  -- Elevated ramps (core/ramp.lua). Every field here is load-bearing in a way
+  -- that is invisible on screen until a ball is on one, which is why they are
+  -- checked rather than trusted.
+  local ramp_ids = {}
+  for i, r in ipairs(b.ramps or {}) do
+    local at = ("ramps[%d]"):format(i)
+    if type(r) ~= "table" then
+      e[#e+1] = at .. ": expected a table"
+    else
+      if type(r.id) ~= "string" or r.id == "" then
+        e[#e+1] = at .. ".id: expected a non-empty string"
+      elseif ramp_ids[r.id] then
+        e[#e+1] = at .. ": duplicate id " .. r.id
+      else
+        ramp_ids[r.id] = true
+      end
+
+      -- The path arrives here already expanded by core/curve.lua, so it is a
+      -- flat list whatever it looked like in the file.
+      local len = 0
+      if type(r.path) ~= "table" or #r.path < 4 or #r.path % 2 ~= 0 then
+        e[#e+1] = at .. ".path: expected an even list of >=4 coordinates"
+      else
+        for k = 3, #r.path, 2 do
+          len = len + math.sqrt((r.path[k] - r.path[k-2])^2 + (r.path[k+1] - r.path[k-1])^2)
+        end
+        if len < C.RAMP_MOUTH * 3 then
+          e[#e+1] = (at .. ".path: %.0fpx long, which is barely more than its own two mouths")
+            :format(len)
+        end
+      end
+
+      -- A lane the ball cannot travel without scraping both rails is not a
+      -- ramp, it is a wedge that happens to be elevated.
+      local ball_d = C.BALL_RADIUS * 2
+      if not isnum(r.width) then
+        e[#e+1] = at .. ".width: expected a number"
+      elseif r.width < ball_d * 1.5 then
+        e[#e+1] = (at .. ".width: %.1fpx leaves no room beside a %.1fpx ball")
+          :format(r.width, ball_d)
+      end
+      if not isnum(r.height) or r.height <= 0 then
+        e[#e+1] = at .. ".height: expected a height above the playfield"
+      end
+
+      -- The slopes are the ramp's difficulty, stated as the steepest gradient
+      -- at each end rather than as a length, because that is the number that
+      -- decides whether a given shot makes it.
+      for _, which in ipairs({ "entry_slope", "exit_slope" }) do
+        local v = r[which]
+        if not isnum(v) or v <= 0 then
+          e[#e+1] = ("%s.%s: expected a positive gradient"):format(at, which)
+        elseif v > C.RAMP_MAX_SLOPE then
+          e[#e+1] = ("%s.%s: %.2f is steeper than %.2f; no shot on either board pays for that")
+            :format(at, which, v, C.RAMP_MAX_SLOPE)
+        end
+      end
+
+      -- Climb and descent have to fit, with a crown between them. Without
+      -- this the ramp never reaches the height it claims, and everything
+      -- drawn from that height quietly disagrees with everything simulated.
+      if isnum(r.height) and isnum(r.entry_slope) and isnum(r.exit_slope)
+         and r.entry_slope > 0 and r.exit_slope > 0 and len > 0 then
+        local rise = 1.5 * r.height / r.entry_slope
+        local fall = 1.5 * r.height / r.exit_slope
+        if rise + fall > len then
+          e[#e+1] = (at .. ": climbing %.0fpx and descending %.0fpx needs %.0fpx of ramp, but it is %.0fpx long")
+            :format(rise, fall, rise + fall, len)
+        end
+      end
+
+      if r.enter ~= nil and r.enter ~= "both" and r.enter ~= "start" and r.enter ~= "end" then
+        e[#e+1] = at .. ".enter: expected 'both', 'start' or 'end'"
+      end
+    end
+  end
+
   -- The link (§5). One tube out, one arrival point in.
   if type(b.tube) ~= "table" then
     e[#e+1] = "tube: missing"
@@ -235,7 +314,10 @@ function M.board(b)
 
   if not isnum(b.drain_y) then e[#e+1] = "drain_y: expected number" end
 
-  -- Everything must sit inside the playfield.
+  -- Everything must sit inside the playfield -- except a ramp, which is
+  -- allowed to hang off the edge and is deliberately absent below. A ramp is
+  -- above the playfield rather than on it, so the board's rectangle is not
+  -- its boundary; app/render.lua widens its scissor to whatever they cover.
   if type(b.size) == "table" and isnum(b.size.w) and isnum(b.size.h) then
     local function inside(where, x, y)
       if isnum(x) and isnum(y) and (x < 0 or y < 0 or x > b.size.w or y > b.size.h) then

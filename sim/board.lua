@@ -5,14 +5,29 @@
 --- file or anywhere else in sim/ -- that boundary is what keeps the headless
 --- test harness working (§5, §7).
 
-local C   = require("core.constants")
-local geo = require("core.geometry")
+local C    = require("core.constants")
+local geo  = require("core.geometry")
+local ramp = require("core.ramp")
 
 local Board = {}
 Board.__index = Board
 
+-- Collision layers. A ramp runs ABOVE the playfield, so "over" and "under"
+-- have to be a real physical distinction rather than a drawing trick: the
+-- ball belongs to one of two layers at any moment and simply does not see the
+-- other one's geometry.
+--
+-- FIELD keeps BALL *and* FIELD in its mask so nothing about how the existing
+-- furniture interacts changes -- the raised post and the left flipper tip
+-- overlap by design, and dropping FIELD from that mask would silently let
+-- them pass through each other.
+local CAT_BALL  = 0x0001
+local CAT_FIELD = 0x0002
+local CAT_RAMP  = 0x0004
+
 local function ud(fixture, kind, id)
   fixture:setUserData({ kind = kind, id = id })
+  fixture:setFilterData(CAT_FIELD, CAT_FIELD + CAT_BALL, 0)
 end
 
 ---------------------------------------------------------------------------
@@ -170,6 +185,47 @@ local function build_guards(self, def)
   end
 end
 
+--- The rails of every ramp, on the ramp layer.
+---
+--- Static edges exactly like walls, and deliberately duller than them: a ramp
+--- is a plastic lane, so it eats the speed a ball scrapes off against it
+--- rather than handing it back. A ramp that bounced like the shell would make
+--- a shot that clips a rail faster than one that does not.
+local function build_ramps(self, def)
+  for _, r in ipairs(def.ramps or {}) do
+    for _, rail in ipairs({ r.geom.left, r.geom.right }) do
+      for i = 1, #rail - 3, 2 do
+        local shape = love.physics.newEdgeShape(rail[i], rail[i+1], rail[i+2], rail[i+3])
+        local f = love.physics.newFixture(self.ground, shape, 0)
+        f:setRestitution(0.14)
+        f:setFriction(0.12)
+        f:setUserData({ kind = "rail", id = r.id })
+        f:setFilterData(CAT_RAMP, CAT_BALL, 0)
+      end
+    end
+
+    -- ...and the part of the ramp that is solid to a ball on the PLAYFIELD.
+    -- Near its feet the lane is inches off the floor, so a ball cannot go
+    -- under it and must go around; only where it has climbed clear does the
+    -- space beneath open up. Without these the rails existed on the ramp
+    -- layer alone and a playfield ball walked through the side of a ramp
+    -- lying on the ground, which is what made it read as a drawing.
+    --
+    -- Ordinary field walls, so they wedge, jam a flipper and sound exactly as
+    -- any other wall does. core/ramp.lua decides where they are.
+    for _, poly in ipairs(r.geom.skirt) do
+      for i = 1, #poly - 3, 2 do
+        local shape = love.physics.newEdgeShape(poly[i], poly[i+1], poly[i+2], poly[i+3])
+        local f = love.physics.newFixture(self.ground, shape, 0)
+        f:setRestitution(0.20)
+        f:setFriction(0.10)
+        ud(f, "rampwall", r.id)
+      end
+    end
+    self.ramps[#self.ramps+1] = r
+  end
+end
+
 ---@param def table validated board definition
 ---@return table board
 function Board.new(def)
@@ -181,7 +237,12 @@ function Board.new(def)
   self.flippers = {}
   self.devices  = {}
   self.guards   = {}
+  self.ramps    = {}
   self.ball     = nil
+  -- Which ramp the ball is on, and how far along it. nil means the playfield,
+  -- which is where a ball starts and where it always ends up.
+  self.on_ramp  = nil
+  self.ball_s   = 0
   self.events   = {}
 
   build_walls(self, def)
@@ -191,6 +252,7 @@ function Board.new(def)
   build_mouth(self, def)
   build_devices(self, def)
   build_guards(self, def)
+  build_ramps(self, def)
   for _, spec in ipairs(def.flippers) do build_flipper(self, def, spec) end
 
   self.world:setCallbacks(
@@ -214,7 +276,11 @@ function Board:spawn(x, y, vx, vy)
   f:setFriction(C.BALL_FRICTION)
   ud(f, "ball")
   body:setLinearVelocity(vx or 0, vy or 0)
-  self.ball = body
+  self.ball    = body
+  self.ball_fx = f
+  self.on_ramp = nil
+  self.ball_s  = 0
+  self:_see("field")
   return body
 end
 
@@ -223,6 +289,9 @@ function Board:despawn()
     if not self.ball:isDestroyed() then self.ball:destroy() end
     self.ball = nil
   end
+  self.ball_fx = nil
+  self.on_ramp = nil
+  self.ball_s  = 0
 end
 
 function Board:ball_pos()
@@ -257,6 +326,129 @@ function Board:arrive(speed)
   local e = self.def.entry
   local len = math.sqrt(e.dir.x * e.dir.x + e.dir.y * e.dir.y)
   self:spawn(e.x, e.y, e.dir.x / len * speed, e.dir.y / len * speed)
+end
+
+---------------------------------------------------------------------------
+-- Ramps
+---------------------------------------------------------------------------
+
+--- Point the ball's collision mask at one layer's geometry.
+---@param layer "field"|"ramp"
+function Board:_see(layer)
+  if not self.ball_fx then return end
+  self.ball_fx:setFilterData(CAT_BALL, (layer == "ramp") and CAT_RAMP or CAT_FIELD, 0)
+end
+
+--- Put the ball on a ramp, or take it off the one it is on. Both halves
+--- report, because app/ wants to sound the difference and because "the ball
+--- got onto the ramp and never came off" is the failure this whole layer has
+--- to be watched for.
+function Board:_mount(r, s)
+  self.on_ramp, self.ball_s = r, s
+  self:_see("ramp")
+  local x, y = self:ball_pos()
+  self.events[#self.events+1] =
+    { kind = "ramp", board = self.id, id = r.id, at = "enter", x = x, y = y }
+end
+
+function Board:_dismount()
+  local id = self.on_ramp and self.on_ramp.id
+  self.on_ramp, self.ball_s = nil, 0
+  self:_see("field")
+  local x, y = self:ball_pos()
+  self.events[#self.events+1] =
+    { kind = "ramp", board = self.id, id = id, at = "exit", x = x, y = y }
+end
+
+--- Is the ball about to commit to a ramp? Only from inside the lane, only
+--- through a mouth that admits it, and only when it is actually travelling
+--- into the climb rather than drifting across the entrance.
+---
+--- The lateral test is tighter than the lane by a full ball radius on purpose:
+--- the instant the mask flips, the rails become solid to a ball that was
+--- passing straight through them, and a ball already overlapping one would be
+--- shoved sideways out of the mouth by the solver.
+---@return table|nil ramp, number|nil s
+function Board:_boarding(x, y, vx, vy)
+  for _, r in ipairs(self.ramps) do
+    local g = r.geom
+    local s, lat, tx, ty = ramp.project(g, x, y)
+    if math.abs(lat) <= g.width / 2 - C.BALL_RADIUS then
+      local along = vx * tx + vy * ty
+      -- The window is INSIDE the ramp, never before it. A ball that mounts
+      -- while its projection is still short of the mouth is, by the very
+      -- next step, a ball whose projection has run off the end -- which is
+      -- exactly what the safety net in _step_ramps takes it off the ramp
+      -- for. It mounted and dismounted in two ticks and never climbed a
+      -- pixel: nineteen of nineteen shots on Foundry, all of them reported
+      -- as "reached the mouth" and none of them as a ride.
+      --
+      -- Nothing is missed by waiting: the window is RAMP_MOUTH long and the
+      -- ball covers at most 9.1px in a step at its speed ceiling, so it
+      -- cannot cross the mouth without landing inside it at least twice.
+      if ramp.admits(g, "start") and s >= 0 and s < C.RAMP_MOUTH
+         and along >= g.enter_speed.start then
+        return r, s
+      end
+      if ramp.admits(g, "end") and s > g.length - C.RAMP_MOUTH and s <= g.length
+         and -along >= g.enter_speed["end"] then
+        return r, s
+      end
+    end
+  end
+  return nil, nil
+end
+
+--- One step of the ramp layer, run before the world solves.
+---
+--- The projection is the authority, not the entry test: a ball whose
+--- centreline position has run off either end, or that is somehow outside the
+--- rails, goes back on the playfield immediately. Without that a ball could
+--- be stranded on the ramp layer standing on open playfield, seeing none of
+--- the geometry and falling through the whole board.
+function Board:_step_ramps()
+  if #self.ramps == 0 then return end
+  if not self.ball or self.ball:isDestroyed() then
+    if self.on_ramp then self.on_ramp, self.ball_s = nil, 0 end
+    return
+  end
+  local x, y   = self.ball:getPosition()
+  local vx, vy = self.ball:getLinearVelocity()
+
+  if self.on_ramp then
+    local g = self.on_ramp.geom
+    local s, lat, tx, ty = ramp.project(g, x, y)
+    if s < 0 or s > g.length or math.abs(lat) > g.width / 2 + C.BALL_RADIUS then
+      self:_dismount()
+      return
+    end
+    self.ball_s = s
+    -- What the climb costs. GRAVITY_PX is only the component of gravity that
+    -- runs DOWN a playfield tilted 6.5deg; the component pressing the ball
+    -- into that playfield is cot(6.5deg) times larger, and a rising lane
+    -- turns a slice of that much larger force against the ball. See
+    -- C.RAMP_CLIMB_G. The force is down-slope whichever way the ball is
+    -- going, which is what lets a shot that runs out of speed roll back out
+    -- of the mouth it came in through.
+    local slope = ramp.slope_at(g, s)
+    if slope ~= 0 then
+      local a = C.RAMP_CLIMB_G * slope * self.ball:getMass()
+      self.ball:applyForce(-tx * a, -ty * a)
+    end
+    return
+  end
+
+  local r, s = self:_boarding(x, y, vx, vy)
+  if r then self:_mount(r, s) end
+end
+
+--- How high the ball is above the playfield, in board pixels. Zero unless it
+--- is on a ramp. app/ draws the shadow from this and core/ has no opinion
+--- about it at all.
+---@return number
+function Board:ball_z()
+  if not self.on_ramp then return 0 end
+  return ramp.height_at(self.on_ramp.geom, self.ball_s)
 end
 
 ---------------------------------------------------------------------------
@@ -424,6 +616,11 @@ function Board:step(bstate, has_ball)
     move_body_to(g.body, home.x, home.y, g.rate, dt)
   end
 
+  -- Before the solve: the layer the ball is on decides what it can hit this
+  -- step, and the climb's force has to be in the same solve as the contacts
+  -- it is fighting.
+  self:_step_ramps()
+
   self.world:update(dt)
 
   if self.ball and not self.ball:isDestroyed() then
@@ -434,8 +631,10 @@ function Board:step(bstate, has_ball)
       local k = C.BALL_MAX_SPEED / sp
       self.ball:setLinearVelocity(vx * k, vy * k)
     end
+    -- A ball on a ramp is above the playfield, so the drain line is not
+    -- under it however far down the board the ramp happens to run.
     local _, y = self.ball:getPosition()
-    if y > self.def.drain_y then
+    if y > self.def.drain_y and not self.on_ramp then
       self.events[#self.events+1] = { kind = "drain", board = self.id }
     end
   end

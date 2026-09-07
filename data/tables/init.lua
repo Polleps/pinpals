@@ -7,6 +7,8 @@
 --- module knows the module names rather than just requiring them inline.
 
 local validate = require("core.validate")
+local curve    = require("core.curve")
+local ramp     = require("core.ramp")
 
 local M = {}
 
@@ -38,7 +40,18 @@ function M.try_load()
     package.loaded[mod] = nil
     local ok, res = pcall(require, mod)
     if ok and type(res) == "table" then
-      boards[id] = res
+      -- Curve nodes are expanded into plain polylines here, before anything
+      -- else sees the board: validation, the geometry gate, sim/ and app/ all
+      -- read the flat lists they always did, and none of them has to know
+      -- what an arc is. The authored form stays on `walls[i].spec` for the
+      -- coordinate overlay.
+      local cok, cerrs = curve.expand_board(res)
+      if cok then
+        boards[id] = res
+      else
+        package.loaded[mod] = nil
+        for _, msg in ipairs(cerrs) do errs[#errs+1] = ("board %s: %s"):format(id, msg) end
+      end
     else
       package.loaded[mod] = nil
       errs[#errs+1] = ("board %s: %s"):format(id, tostring(res))
@@ -48,6 +61,12 @@ function M.try_load()
 
   local ok, verrs = validate.set(boards)
   if not ok then return nil, verrs end
+
+  -- Rails, arclengths and height profiles, derived once now that the authored
+  -- fields are known to be sane. Everything downstream reads `ramp.geom` and
+  -- none of it recomputes -- three layers deriving the same rail is three
+  -- chances for the picture to disagree with the physics.
+  for _, b in pairs(boards) do ramp.prepare(b) end
   return boards, {}
 end
 
