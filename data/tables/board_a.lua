@@ -82,8 +82,8 @@ return {
     -- chain descends throughout -- the bowl check would say so otherwise --
     -- and ends 9.9px outside its pivot, the offset measured for the old
     -- lower-wall chains and kept for the same reason.
-    { 36,  700, 40,  852, 110, 864, 161, 873 },
-    { 412, 700, 408, 852, 338, 864, 287, 873 },
+    { 36,  700, 40,  852, 110, 864, 148, 873 },
+    { 412, 700, 408, 852, 338, 864, 300, 873 },
     -- The pass ramp. A short channel high on the board, not the 390px
     -- corridor that used to run from y=150 to y=540 through the dead centre.
     --
@@ -145,8 +145,8 @@ return {
   -- triangle reaches inside the flipper's swept arc, which the geometry gate
   -- rejects: at pivot-24 it is 56.3px from the pivot against a 52.96px reach.
   slingshots = {
-    { p = { 66, 772, 140, 822, 66, 830 } },
-    { p = { 382, 772, 308, 822, 382, 830 } },
+    { p = { 66, 756, 140, 806, 66, 814 } },
+    { p = { 382, 756, 308, 806, 382, 814 } },
   },
 
   -- A's character: a bumper cluster. Chaotic, keeps the ball alive.
@@ -263,8 +263,8 @@ return {
   -- 21.6px) was run on the old board and is not repeated here: 21.6px against
   -- a 17.3px ball barely drained at all, which is a wall, not a board.
   flippers   = {
-    { side = "left",  x = 168, y = 880 },
-    { side = "right", x = 280, y = 880 },
+    { side = "left",  x = 155, y = 880 },
+    { side = "right", x = 293, y = 880 },
   },
 
   -- §6.1: both devices are persistent states with a visible travel time.
@@ -311,7 +311,30 @@ return {
       -- off-centre, so the post mainly blocks whichever flipper has to shoot
       -- ACROSS the middle, and the two boards are blocked on opposite sides
       -- so the skill does not transfer.
-      up           = { x = 224, y = 905 }, -- extended: spans the drain gap
+      -- Re-swept for boards-v3 phase 0, and it had to be: the bat grew from
+      -- 48.6px to 64px, so the flipper's tip at rest dropped from 26.7px
+      -- below the pivot to 31.8px, and the old y=905 was suddenly ABOVE the
+      -- ball sitting on the flipper rather than below it. Measured, that made
+      -- the post an absolute block again -- 0/28 passes with it up -- which is
+      -- the exact failure the sweep below was built to avoid.
+      --
+      -- 912 is 32px under the pivots, which puts it level with the tip at
+      -- rest, the same relationship the old 905 had to the old bat. The band
+      -- is as steep as it ever was, ~10 points of pass rate per pixel:
+      --
+      --   post y   Foundry pass   Glasshouse pass   drains stopped
+      --      909            18%               14%             100%
+      --      911            39%               21%             100%
+      --      912            50%               29%             100%   <- here
+      --      913            54%               36%             100%
+      --      914            71%               54%             100%
+      --   (down)           71%               71%               0%
+      --
+      -- 914 and up is the plateau where the post costs nothing; 909 and below
+      -- is the pause button. 912 keeps 70% of Foundry's pass rate and 41% of
+      -- Glasshouse's, which is within a point of what y=905 kept before the
+      -- bat grew (69% / 45%). Re-run tests/probe_post.lua after any edit.
+      up           = { x = 224, y = 912 }, -- extended: spans the drain gap
       down         = { x = 224, y = 982 }, -- retracted below the playfield
       w            = 52,
       h            = 12,
