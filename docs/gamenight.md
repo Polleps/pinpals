@@ -3,7 +3,8 @@
 `love .` still starts the normal standalone game. When launched with
 `GAMENIGHT=1`, Pinpals instead joins a GameNight party over newline-delimited
 TCP using LuaSocket (included with LÖVE 11.5). No separate bridge process or
-LuaRocks installation is needed.
+LuaRocks installation is needed. `gamenight.json` carries the game's catalog
+metadata for distributions.
 
 The daemon supplies `GAMENIGHT_ADDR` (`host:port`, default `127.0.0.1:7912`),
 `GAMENIGHT_GAME_ID` (default `pinpals`), and `GAMENIGHT_TOKEN`. The token is
