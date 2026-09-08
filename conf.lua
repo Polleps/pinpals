@@ -16,6 +16,11 @@ function love.conf(t)
   t.window.resizable   = false
   t.window.vsync       = 1
   t.window.msaa        = 4
+  if os.getenv("GAMENIGHT") == "1" and not has_flag("--test") then
+    -- Warm off-screen; the adapter minimizes immediately, then centers on start.
+    t.window.x = -10000
+    t.window.y = -10000
+  end
 
   t.modules.joystick   = true
   t.modules.physics    = true

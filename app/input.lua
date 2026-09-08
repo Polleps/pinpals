@@ -25,6 +25,29 @@ M.PAD = {
 M.joysticks = {}
 
 local MAX_PADS = 2
+local seated, names
+
+--- Party seats keep their indices, including empty/AI slots. No bots are provided.
+function M.bind_seats(seats, players, joysticks)
+  seated, names, M.joysticks = {}, {}, {}
+  for _, seat in ipairs(seats) do
+    local player = seat.index + 1
+    local occupant = seat.occupant
+    if player >= 1 and player <= MAX_PADS
+      and (occupant.kind == "local" or occupant.kind == "remote") then
+      seated[player] = true
+      M.joysticks[player] = joysticks[player]
+      for _, identity in ipairs(players) do
+        if identity.id == occupant.player_id then names[player] = identity.name end
+      end
+    end
+  end
+end
+
+--- Restore the normal two-player device policy (also useful to isolated tests).
+function M.standalone()
+  seated, names, M.joysticks = nil, nil, {}
+end
 
 ---@param key string
 ---@param pressed boolean
@@ -33,7 +56,9 @@ local MAX_PADS = 2
 function M.from_key(key, pressed, tick)
   for player, map in pairs(M.KEYS) do
     local action = map[key]
-    if action then return intents.new(player, action, pressed, tick) end
+    if action and (not seated or seated[player]) then
+      return intents.new(player, action, pressed, tick)
+    end
   end
   return nil
 end
@@ -54,7 +79,10 @@ end
 --- number back rather than queueing behind the player who stayed connected.
 function M.attach(joystick)
   for player = 1, MAX_PADS do
-    if M.joysticks[player] == nil then
+    if M.joysticks[player] == joystick then return player end
+  end
+  for player = 1, MAX_PADS do
+    if M.joysticks[player] == nil and (not seated or seated[player]) then
       M.joysticks[player] = joystick
       return player
     end
@@ -81,6 +109,10 @@ end
 --- Human-readable bindings, for the on-screen legend.
 function M.legend(player)
   local out = {}
+  if seated then
+    out.name = names[player] or (seated[player] and ("P" .. player) or "Empty")
+    out.empty = not seated[player]
+  end
   for key, action in pairs(M.KEYS[player]) do out[action] = key end
   return out
 end

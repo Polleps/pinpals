@@ -812,8 +812,12 @@ local function hud_roles(x, y, legend, active, transit)
     col(flip and 1 or 0.45, flip and 0.78 or 0.6, flip and 0.25 or 0.85, 1)
     -- Mid-pass the receiver is not flipping yet, they are waiting to catch.
     local label = flip and (transit and "RECEIVING" or "FLIPPER") or "OPERATOR"
-    love.graphics.print(("P%d  %s"):format(p, label), x, y)
     local L = legend[p]
+    love.graphics.print(("P%d  %s"):format(p, L.empty and "EMPTY" or label), x, y)
+    if L.name then
+      love.graphics.setFont(fonts.small)
+      love.graphics.printf(L.name, x + 120, y - 12, 240, "left")
+    end
     col(1, 1, 1, 0.35)
     love.graphics.setFont(fonts.small)
     love.graphics.print(flip
@@ -821,7 +825,7 @@ local function hud_roles(x, y, legend, active, transit)
       or  ("%s gate  %s post  %s/%s guard"):format(L.operator_gate, L.operator_paddle,
                                                    L.flip_left, L.flip_right), x + 120, y + 3)
     love.graphics.setFont(fonts.body)
-    y = y + 22
+    y = y + (L.name and 38 or 22)
   end
   return y
 end
@@ -1026,7 +1030,8 @@ local function draw_hud(state, defs, snaps, legend)
 
   love.graphics.setFont(fonts.small)
   col(1, 1, 1, 0.28)
-  love.graphics.print("R restart   P pause   1 debug   2 coords   3 reload   ESC quit",
+  love.graphics.print(legend[1].name and "GameNight: open the party to pause, replay or skip"
+    or "R restart   P pause   1 debug   2 coords   3 reload   ESC quit",
                       M.hud_x, H - 26)
 end
 
