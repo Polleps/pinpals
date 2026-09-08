@@ -31,6 +31,7 @@ for i, v in ipairs(arg or {}) do
   if v == "--coords" then shot_coords = (arg[i + 1] == "b") and "b" or "a" end
 end
 
+local gamenight
 local match, render, input, audio, fx, record, boards
 local hot = require("app.hotreload")
 local debug_on = false
@@ -54,12 +55,22 @@ local function fit_window()
   if w == cw and h == ch then return end
   -- setMode replaces the whole flag set, so every flag conf.lua chose has to
   -- be restated or vsync and MSAA quietly turn themselves off.
-  love.window.setMode(w, h, { resizable = false, vsync = 1, msaa = 4 })
+  local flags = { resizable = false, vsync = 1, msaa = 4 }
+  if os.getenv("GAMENIGHT") == "1" then flags.x, flags.y = -10000, -10000 end
+  love.window.setMode(w, h, flags)
 end
 
 function love.load()
+  if os.getenv("GAMENIGHT") == "1" and mode == "play" and love.window then
+    require("app.gamenight_window").hide()
+  end
   love.physics.setMeter(C.METER)      -- §4.2: set once, before any world
   boards = require("data.tables.init").load()
+  if mode == "play" and os.getenv("GAMENIGHT") == "1" then
+    fit_window()
+    gamenight = require("app.gamenight").new(boards)
+    return
+  end
   if mode ~= "test" then fit_window() end
 
   if mode == "test" then
@@ -189,6 +200,7 @@ local function push_intent(it)
 end
 
 function love.update(dt)
+  if gamenight then return gamenight:update(dt) end
   if mode ~= "play" then return end
 
   -- Before the step, so a reload's brand-new match is what this frame
@@ -223,6 +235,7 @@ function love.update(dt)
 end
 
 function love.draw()
+  if gamenight then return gamenight:draw() end
   if mode == "test" then return end
 
   if mode == "shot" then
@@ -250,6 +263,7 @@ end
 ---------------------------------------------------------------------------
 
 function love.keypressed(key)
+  if gamenight then return gamenight:key(key, true) end
   if mode ~= "play" then return end
   if key == "escape" then love.event.quit() return end
   -- Number row rather than function keys: on a Mac laptop every F-key is a
@@ -280,6 +294,7 @@ end
 --- Which button is which follows the file: polylines are far and away the
 --- commoner paste, so they get the button the hand is already on.
 function love.mousepressed(x, y, button)
+  if gamenight then return end
   if mode ~= "play" or (button ~= 1 and button ~= 2) then return end
   local at = render.pick_inspect(match, x, y)
   if not at then return end
@@ -292,26 +307,38 @@ function love.mousepressed(x, y, button)
 end
 
 function love.keyreleased(key)
+  if gamenight then return gamenight:key(key, false) end
   if mode ~= "play" then return end
   push_intent(input.from_key(key, false, match.state.tick))
 end
 
 function love.gamepadpressed(js, button)
+  if gamenight then return gamenight:pad(js, button, true) end
   if mode ~= "play" then return end
   push_intent(input.from_pad(js, button, true, match.state.tick))
 end
 
 function love.gamepadreleased(js, button)
+  if gamenight then return gamenight:pad(js, button, false) end
   if mode ~= "play" then return end
   push_intent(input.from_pad(js, button, false, match.state.tick))
 end
 
-function love.joystickadded(js)   if input then input.attach(js) end end
-function love.joystickremoved(js) if input then input.detach(js) end end
+function love.joystickadded(js)
+  if gamenight then gamenight:attach(js) elseif input then input.attach(js) end
+end
+function love.joystickremoved(js)
+  if gamenight then gamenight:detach(js) elseif input then input.detach(js) end
+end
+
+function love.focus(focused)
+  if gamenight then gamenight:focus(focused) end
+end
 
 --- Write the playtest capture on the way out, and say where it went, so a
 --- session that felt like something also produced something to read.
 function love.quit()
+  if gamenight then return gamenight:quit() end
   if mode ~= "play" or not record then return false end
   print(("\n%s\n"):format(record.summary(match)))
   local path = record.finish(match)
