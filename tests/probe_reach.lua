@@ -119,7 +119,7 @@ return function()
 
   local function play_map(def, seconds, grid, seed, hits)
     math.randomseed(seed)
-    local b = Board.new(def)
+    local b = Board.new(def, seed)
     b:serve()
     local steps = math.floor(seconds * C.TICK_HZ)
     local c = cmd()

@@ -69,7 +69,10 @@ function love.load()
   end
 
   local Match = require("sim.match")
-  match  = Match.new(boards)
+  -- A played session gets its own seed so no two games serve alike; --shot
+  -- keeps the fixed one, because a screenshot has to be the same picture
+  -- every time it is taken.
+  match  = Match.new(boards, mode ~= "shot" and os.time() or nil)
   render = require("app.render")
   input  = require("app.input")
   audio  = require("app.audio")
@@ -112,7 +115,7 @@ function love.load()
   for _, js in ipairs(love.joystick.getJoysticks()) do input.attach(js) end
   -- §5.1: the intent stream makes a session recordable for free. Only in
   -- play mode -- --test and --shot never touch the disk.
-  record.start(boards)
+  record.start(boards, match.seed)
 
   if hot_on then
     local paths = require("data.tables.init").sources()
@@ -130,7 +133,9 @@ end
 --- session log would otherwise report the wrong game.
 local function restart_match()
   record.restart(match)
-  match = require("sim.match").new(boards)
+  -- A fresh seed, drawn from the retiring match's own generator: `os.time()`
+  -- would hand two restarts inside one second the same serves.
+  match = require("sim.match").new(boards, match.rng:random(1, 2 ^ 31 - 1))
   fx.reset()
 end
 

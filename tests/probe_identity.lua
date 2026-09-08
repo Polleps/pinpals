@@ -56,7 +56,10 @@ return function()
     local flat = { relay = 0, score = 0, rally_score = 0, best_rally_score = 0 }
     for s = 1, seeds do
       math.randomseed(31337 + s * 977)
-      local b = Board.new(def)
+      -- The serve carries jitter now, so the board gets this seed too: built
+      -- without one, every seed here would receive the same serve and the
+      -- average would be over flipper timing alone.
+      local b = Board.new(def, 31337 + s * 977)
       lit = {}                     -- per match, not per ball, as core/ has it
       for _ = 1, balls_per_seed do
         b:serve()

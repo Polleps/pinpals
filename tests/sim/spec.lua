@@ -419,11 +419,23 @@ return function(H)
       -- 180s, because the cluster sat in a dead band between the orbit lane
       -- and the ramp. A bumper nothing can reach is scenery, and this is the
       -- test that says so out loud.
+      --
+      -- Twelve seeds, not three. Serves carry jitter (C.SERVE_ANGLE_VAR), and
+      -- what that exposed is that three seeds had never been enough: the old
+      -- fixed serve flew one exact line into the west bumper on every ball,
+      -- which is where 192 of its 209 hits over 48 seeds came from, while the
+      -- east bumper was already silent in 34 of those 48. Both numbers were a
+      -- single trajectory being counted over and over. With the serve varying
+      -- per seed each bumper is live in roughly two seeds in five, so a dozen
+      -- of them is what it takes for "reachable" to mean reachable rather
+      -- than lucky.
       local def = boards.a
       local seen, total = {}, 0
-      for seed = 1, 3 do
+      local SEEDS = 12
+      for seed = 1, SEEDS do
         math.randomseed(4100 + seed)
-        local b = Board.new(def)
+        -- The board gets the seed as well, or all twelve runs share one serve.
+        local b = Board.new(def, 4100 + seed)
         b:serve()
         local c = cmd()
         for i = 1, math.floor(40 * C.TICK_HZ) do
@@ -446,9 +458,12 @@ return function(H)
         A.truthy((seen[i] or 0) > 0,
           ("bumper %d is unreachable: it is scenery, not a device"):format(i))
       end
-      -- Measured 0.60/s over 6 seeds; this floor is well under the noise.
-      A.truthy(total / 120 > 0.15,
-        ("the cluster is barely live: %.2f hits/s"):format(total / 120))
+      -- Measured 0.12/s over 48 seeds of this harness (0.21/s before the serve
+      -- stopped repeating one line into the cluster). The floor is half that,
+      -- well under the seed-to-seed noise.
+      local secs = SEEDS * 40
+      A.truthy(total / secs > 0.06,
+        ("the cluster is barely live: %.2f hits/s"):format(total / secs))
     end)
 
     it("a received ball can be passed on -- the rally can actually continue",
@@ -775,7 +790,11 @@ return function(H)
       local seen, total = {}, 0
       for seed = 1, 3 do
         math.randomseed(8800 + seed)
-        local b = Board.new(def)
+        -- The seed goes to Board.new as well, or all three runs receive the
+        -- SAME serve (sim/board.lua falls back to C.RNG_SEED) and this is one
+        -- sample wearing three hats. tests/probe_identity.lua carries the
+        -- same note; this tripwire was missed when the serve gained jitter.
+        local b = Board.new(def, 8800 + seed)
         b:serve()
         local c = cmd()
         for i = 1, math.floor(40 * C.TICK_HZ) do

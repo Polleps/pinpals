@@ -22,9 +22,13 @@ local session = nil
 ---------------------------------------------------------------------------
 
 --- @param boards table<string, table>
-function M.start(boards)
+--- @param seed number|nil the match's seed. The intent stream alone stopped being
+---   enough to reproduce a session the moment serves gained their jitter, so
+---   the seed is written down with it.
+function M.start(boards, seed)
   session = {
     started  = os.time(),
+    seed     = seed,
     lines    = {},
     rallies  = {},          -- length of every completed rally, in crossings
     drains_by_board = { a = 0, b = 0 },
@@ -226,7 +230,7 @@ end
 function M.finish(match)
   if not session then return nil end
   local body = M.summary(match)
-    .. "\n\n--- events and intents ---\n"
+    .. ("\n\n--- events and intents (seed %s) ---\n"):format(session.seed or "?")
     .. table.concat(session.lines, "\n") .. "\n"
   local name = os.date("session-%Y%m%d-%H%M%S.log", session.started)
   session = nil

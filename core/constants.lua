@@ -227,6 +227,32 @@ C.HEAT_SPEED_MAX  = 1.55       -- ceiling on that multiplier
 
 -- Match flow -----------------------------------------------------------------
 C.SERVE_SPEED    = 1050        -- px/s off the plunger; enough to reach the gate
+-- No two plunger pulls are the same, so a serve is not a fixed shot.
+--
+-- These are small on purpose, and tests/probe_serve.lua is why: the OUTCOME
+-- saturates far below them. Foundry's serve bounces off the top arc, and that
+-- bounce is chaotic -- at +/-0.6deg it already lands anywhere from x=18 to
+-- x=429 (sd 170px), and doubling the jitter to +/-2.4deg does not widen that
+-- by a pixel. So the size of the jitter buys nothing above a fraction of a
+-- degree, while a large one only risks the serve's actual job. They are set
+-- to what a hand on a plunger plausibly does: over 200 serves, every one
+-- still climbs past the tube mouth and one drained untouched inside 3s.
+--
+-- What the jitter changed is what a REPEATED serve was worth. The fixed serve
+-- flew one line into Foundry's west bumper every ball -- 192 of that bumper's
+-- 209 hits over 48 seeds of random play came from it -- so the cluster's
+-- measured liveness falls from 0.21 to 0.12 hits/s. That is the recording
+-- being taken away, not the bumper becoming scenery; tests/sim/spec.lua's
+-- reachability test now samples enough seeds to tell the difference.
+C.SERVE_SPEED_VAR = 0.04       -- +/- fraction on that speed, so 1008-1092 px/s
+C.SERVE_ANGLE_VAR = 0.021      -- +/- radians off the lane, ~1.2 degrees
+-- §5.1 wants a match to replay from its intent stream plus a seed, so the
+-- jitter above is drawn from the match's own generator rather than the global
+-- one. This is the seed a Match uses when nobody hands it one: a headless
+-- gate, a probe and a --shot all want the same match twice, and only a played
+-- session asks for a fresh one.
+C.RNG_SEED       = 20260907
+
 C.SERVE_DELAY    = 0.60        -- pause before a ball is served
 C.DRAIN_DELAY    = 0.90        -- pause after a drain before re-serve
 

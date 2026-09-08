@@ -18,6 +18,19 @@
 --- one level up from the devices: do I keep the rally safe, or send it
 --- somewhere it can actually score?
 ---
+--- BOTH ROWS ARE STALE, and one of them is stale because of an edit below.
+--- The same probe_identity run today reads:
+---
+---   Foundry     11.07s,   5 points/s, swept pass 50%, drains 0.0753/s
+---   Glasshouse   6.95s, 271 points/s, swept pass 50%, drains 0.1272/s
+---
+--- Glasshouse moved because the plunger-lane target went (see `targets`):
+--- it was 6.59s / 183 pts/s / 0.1113 before that edit, so the identity got
+--- SHARPER, not softer -- still the deadlier board, and now the expensive one
+--- by a wider margin. Foundry moved without anyone touching Foundry, and
+--- 14 -> 5 points/s is not noise; nothing in this file explains it and the
+--- "17x" above should not be quoted again until someone measures why.
+---
 --- The gap between the boards WIDENED when they grew. Glasshouse used to
 --- drain only 7% faster than Foundry despite its wider gap, which made the
 --- identity a claim more than a fact; the outlanes cost it far more than they
@@ -180,10 +193,89 @@ return {
   -- The gallery is the consolation bank: it pays on its own and charges
   -- nothing across the tube, so its members can be unbalanced without
   -- breaking anything.
+  --
+  -- EVERY hit count above is void, and so is the reasoning built on it. The
+  -- gallery's left member used to stand at (56,470), which is DIRECTLY ABOVE
+  -- THE PLUNGER at (48,660): the board serves straight up that lane, so the
+  -- target was the backboard the serve hit. tests/probe_serve.lua now splits
+  -- target hits by whether they landed within a second of the serve, and the
+  -- split was total --
+  --
+  --   target        off the serve   in real play   (240 served balls)
+  --   ( 56,470)               240              9
+  --   (300,480)                 0             51
+  --   (352,480)                 0             27
+  --   (404,480)                 0             48
+  --
+  -- 240 of 240. Its "154 hits, the live one" was the plunger firing into it
+  -- once per ball, and as content it was the DEADEST thing on the board. The
+  -- 12:1 split that condemned (124,470) was measured the same way, against a
+  -- number that was not a measurement of play at all.
+  --
+  -- What it cost was the rest of the board. The serve stopped 176px up, fell
+  -- back down its own lane at x=48 -- a ball's width from the left outlane --
+  -- and:
+  --
+  --                                     was     now
+  --   serve apex y                      484      36   (tube mouth y=398)
+  --   drained within 3s of the serve    26%      5%   (random flipper play)
+  --   served balls that ever reached
+  --     the tube mouth's height         19%    100%
+  --   target hits per 60 balls          100     201   (probe_identity)
+  --   bank completions per 60 balls      19      25
+  --   points/s                          183     271
+  --
+  -- Eighty-one percent of Glasshouse's balls never got as high as the tube
+  -- mouth. The skyway, the orbits and most of this target row were content on
+  -- a board most balls never reached. Nothing about that was designed -- the
+  -- plunger and the target arrived in the same commit and neither knew about
+  -- the other. The board is MORE itself afterwards, not less: ball life 6.59
+  -- -> 6.95s against Foundry's 11.07s, drains 0.1113 -> 0.1272/s against
+  -- Foundry's 0.0753. Clean and deadly, and now also worth shooting.
+  --
+  -- One number moves the wrong way and it is not a regression in the ramp:
+  -- the SERVED ball's pass rate falls 15% -> 5%. The broken serve was
+  -- dropping every ball onto the LEFT flipper, which the post table below
+  -- shows is Glasshouse's stronger passer (75% against the right's 63%), so
+  -- the old rate was a gift and not a property of the board. Measured from
+  -- the flipper instead of from the plunger nothing moved: the swept-shot
+  -- pass rate is 50% before and after, and the received-ball pass gate in
+  -- tests/sim/spec.lua still passes. Foundry serves to the top of the board
+  -- too and passes 22% of served balls, so 5% is worth a look on its own --
+  -- but it is a question about the ramp and the gate, not about the plunger.
+  --
+  -- WHERE the target went, and why not anywhere nearer. With the lane clear
+  -- the serve rides the top arc and comes down at x=371 (was x=48), so the
+  -- left column is now fed by nothing at all: x=100/124/140 measure 0, 5 and
+  -- 4 hits per 240 balls, because that column is behind the skyway's left leg
+  -- and the ball does not fall there. The obvious slot -- in the row, between
+  -- the ramp channel's right wall (x=227) and the vault's left member (left
+  -- edge 286) -- is a 59px gap that needs 28 + 2 x 17.3 = 62.6px, so it fits
+  -- only a 22px target, and a 22px target at (256,480) took the received-ball
+  -- pass rate from over 30% to 13%: it stands exactly where a ball falling
+  -- toward the flippers has to get through. (256,620) is worse, on the right
+  -- flipper's cross-body line to the ramp. So it went UP, to (256,250), in
+  -- the upper field the serve fix just made reachable -- 57 hits per 240
+  -- balls against the old position's 9, clear of both pass lines, and with
+  -- nothing above or below it (CLAUDE.md's stacking rule: the vault row
+  -- occupies x=286..418, so a second row is only legal left of it).
+  --
+  -- And the vault's right member moved 480 -> 466, which is a stuck ball. The
+  -- skyway's right foot generates a skirt whose top corner is at (327,499),
+  -- and the geometry gate cleared it at 17.8px from that target's lower-left
+  -- corner against a 17.3px ball -- half a pixel of margin, which is not a
+  -- clearance, it is a notch. Nothing ever reached it while 81% of balls
+  -- stayed below y=398; with the serve fixed the two-minute stall gate found
+  -- a ball parked at (331,491) inside a hundred and twenty seconds. Raising
+  -- the target 14px opens the notch to 30.5px. Moving it RIGHT instead (to
+  -- x=358, 21.7px) still stalled, and moving the whole row up broke the pass
+  -- shot -- this is the four-directions-at-once the ramp note warns about.
   targets = {
     { x = 300, y = 480, w = 28, h = 9, angle = 0, bank = "vault" },
-    { x = 352, y = 480, w = 28, h = 9, angle = 0, bank = "vault" },
-    { x = 56,  y = 470, w = 28, h = 9, angle = 0, bank = "gallery" },
+    -- y=466, not 480, and the 14px is a stuck ball -- see the note above.
+    { x = 352, y = 466, w = 28, h = 9, angle = 0, bank = "vault" },
+    -- The gallery's second member, out of the plunger lane at last.
+    { x = 256, y = 250, w = 28, h = 9, angle = 0, bank = "gallery" },
     { x = 404, y = 480, w = 28, h = 9, angle = 0, bank = "gallery" },
   },
 
@@ -297,7 +389,7 @@ return {
   -- window is set by wall 5's tip instead, and the two do not overlap.
   --
   -- Glasshouse has no bumpers for the skyway to cross, but the elevated part
-  -- of it runs directly over the vault target at (352,480), which stays
+  -- of it runs directly over the vault target at (352,466), which stays
   -- reachable underneath -- the whole point of an elevated lane, and the one
   -- thing CLAUDE.md's stacking rule could not previously allow.
   ramps = {
@@ -325,6 +417,10 @@ return {
 
   tube  = { mouth = { x = 201, y = 398, r = 14 }, to = "a" },
   entry = { x = 370, y = 104, dir = { x = -0.32, y = 1 } },
+  -- Straight up the left lane, and for a long time straight into a standup
+  -- target parked on top of it -- `targets` has the measurement and the fix.
+  -- Nothing may stand in x=39..57 above this point: at double serve jitter
+  -- the ball crosses y=470 anywhere in x=39..56, plus its own 8.65px radius.
   serve = { x = 48,  y = 660, dir = { x = 0, y = -1 } },
 
   drain_y = 940,

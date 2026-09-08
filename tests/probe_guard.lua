@@ -129,7 +129,7 @@ return function()
     local armed_ticks, total_ticks = 0, 0
     for s = 1, seeds do
       math.randomseed(90210 + s * 7919)
-      local b = Board.new(def)
+      local b = Board.new(def, 90210 + s * 7919)
       local cool = 0
       for _ = 1, balls do
         if start == "arrive" then b:arrive(C.TRANSIT_MIN_SP) else b:serve() end

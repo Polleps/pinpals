@@ -227,11 +227,19 @@ local function build_ramps(self, def)
 end
 
 ---@param def table validated board definition
+---@param seed number|nil seeds the board's own generator, which currently only
+---  the serve draws on. A Match derives one per board from the match seed, so
+---  §5.1's "intents plus a seed" still reproduces a whole match. A board built
+---  on its own -- a probe, a spec -- gets the fixed seed and stays as
+---  repeatable as it was before serves had any jitter in them; a harness that
+---  sweeps seeds should pass its own, or every one of its runs gets the same
+---  serve and it is measuring one trajectory rather than the board.
 ---@return table board
-function Board.new(def)
+function Board.new(def, seed)
   local self = setmetatable({}, Board)
   self.def      = def
   self.id       = def.id
+  self.rng      = love.math.newRandomGenerator(seed or C.RNG_SEED)
   self.world    = love.physics.newWorld(0, C.GRAVITY_PX, true)
   self.ground   = love.physics.newBody(self.world, 0, 0, "static")
   self.flippers = {}
@@ -314,10 +322,26 @@ function Board:ball_velocity()
   return self.ball:getLinearVelocity()
 end
 
+--- A symmetric draw in [-amount, +amount] from this board's generator.
+function Board:_jitter(amount)
+  return (self.rng:random() * 2 - 1) * amount
+end
+
 --- Serve from the plunger lane (§ board data `serve`).
+---
+--- A plunger is pulled by a hand, and no two pulls are the same, so the serve
+--- carries a little jitter in both strength and direction -- enough that the
+--- first bounce is not the same bounce every ball, and small enough that the
+--- serve still does its job (C.SERVE_SPEED_VAR, C.SERVE_ANGLE_VAR).
+---
+--- The angle is taken from the authored direction rather than applied to its
+--- components, so a board is free to write `dir` unnormalised; the speed is
+--- the whole magnitude either way.
 function Board:serve()
   local s = self.def.serve
-  self:spawn(s.x, s.y, s.dir.x * C.SERVE_SPEED, s.dir.y * C.SERVE_SPEED)
+  local speed = C.SERVE_SPEED * (1 + self:_jitter(C.SERVE_SPEED_VAR))
+  local a = math.atan2(s.dir.y, s.dir.x) + self:_jitter(C.SERVE_ANGLE_VAR)
+  self:spawn(s.x, s.y, math.cos(a) * speed, math.sin(a) * speed)
 end
 
 --- A ball arriving out of the tube. §5: exit velocity survives the trip; the

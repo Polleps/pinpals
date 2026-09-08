@@ -11,11 +11,21 @@ local Match = {}
 Match.__index = Match
 
 ---@param boards table<string, table> validated definitions
-function Match.new(boards)
+---@param seed number|nil §5.1: a match replays from its intent stream plus a
+---  seed, and the serve jitter is the only thing that draws on it. Omitted,
+---  the match runs on the fixed seed -- so every gate, probe and screenshot
+---  is the same match twice, and only a played session asks for a fresh one.
+function Match.new(boards, seed)
   local self = setmetatable({}, Match)
   self.defs   = boards
+  self.seed   = seed or C.RNG_SEED
+  -- The match's own generator hands each board a seed and, on a restart, the
+  -- next match its seed. Boards draw separately so a serve on A cannot shift
+  -- the sequence B was going to get.
+  self.rng    = love.math.newRandomGenerator(self.seed)
   self.state  = core.new(boards)
-  self.boards = { a = Board.new(boards.a), b = Board.new(boards.b) }
+  self.boards = { a = Board.new(boards.a, self.rng:random(1, 2 ^ 31 - 1)),
+                  b = Board.new(boards.b, self.rng:random(1, 2 ^ 31 - 1)) }
   self.acc    = 0
   self.alpha  = 0
   self.pending = {}
