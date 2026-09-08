@@ -1041,7 +1041,12 @@ return function(H)
       local m = Match.new(boards)
       m.state.boards.a.devices.post.commanded = true
       m:run(C.TICK_HZ)
-      m.boards.a:spawn(192, 600, 0, 0)                  -- drop onto the post
+      -- x=224 is the post's own centre. It used to be 192, which is 6px
+      -- OUTSIDE the raised post (198..250) and only reached it by landing on
+      -- the left flipper first and rolling in -- so the fixture silently
+      -- depended on flipper length, and stopped settling when the bat grew to
+      -- 64px in boards-v3 phase 0. Drop it where the comment above says.
+      m.boards.a:spawn(224, 600, 0, 0)                  -- drop onto the post
       impacts_of(m, C.TICK_HZ * 4)                      -- settle
       local resting = impacts_of(m, C.TICK_HZ * 2)
       A.equal(0, #resting, "a resting ball is still reporting impacts")

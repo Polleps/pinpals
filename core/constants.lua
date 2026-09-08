@@ -168,7 +168,28 @@ C.FIXED_DT       = 1 / C.TICK_HZ
 C.MAX_CATCHUP    = 60          -- 0.25s of simulation, matching that clamp
 
 -- Flippers -------------------------------------------------------------------
-C.FLIPPER_LEN    = 0.76 * C.METER    -- 76mm x10
+-- The bat is sized against the BOARD, not against a real flipper, and the two
+-- disagree. At 0.76m it was 2.81 ball diameters -- a real bat is 2.82 -- but
+-- the board is 25.9 ball diameters wide where a real playfield is 19.1, so
+-- correctly-scaled flippers defended 25.0% of Foundry's width and 28.6% of
+-- Glasshouse's against the 34.6% every real table has used for eighty years.
+-- The bottom of both boards was proportionally under-defended and the side
+-- furniture correspondingly bloated: 9.14 ball widths a side against 6.24.
+--
+-- Growing the ball instead would fix every ratio in one edit and is ruled out
+-- above: a dozen measured thresholds are baked to the radius.
+--
+-- 1.00m is not a taste, it is the ceiling. Tip speed is FLIPPER_SPEED *
+-- FLIPPER_LEN, and past BALL_MAX_SPEED the clamp in sim/ silently eats the
+-- flipper's energy and the device stops being linear:
+--
+--     FLIPPER_LEN <= BALL_MAX_SPEED / FLIPPER_SPEED = 2176 / 34 = 64.0 px
+--
+-- which is 3.70 ball diameters and takes coverage to 31.0% / 34.5%. Reaching
+-- 34.6% on Foundry needs 73.4px and a slower FLIPPER_SPEED; that is a second
+-- global feel change and was deliberately not made at the same time as this
+-- one. See docs/boards-v3.md 3.
+C.FLIPPER_LEN    = 1.00 * C.METER    -- 100mm x10, 64px, 3.70 ball diameters
 C.FLIPPER_THICK  = 0.16 * C.METER
 C.FLIPPER_DENSITY= 14
 C.FLIPPER_TORQUE = 5.0e6
