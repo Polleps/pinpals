@@ -4,7 +4,13 @@ local M = {}
 local sdl, window
 
 local function native_window()
-  if sdl then return end
+  if sdl then
+    -- setMode can replace SDL's window on Windows. Never hide a handle
+    -- captured before the final window size was chosen.
+    local current = sdl.SDL_GL_GetCurrentWindow()
+    if current ~= nil then window = current end
+    return
+  end
   local ok, ffi = pcall(require, "ffi")
   if not ok then return end
   ffi.cdef [[
@@ -31,11 +37,16 @@ end
 
 function M.show()
   if not love.window then return end
+  native_window()
   if sdl then sdl.SDL_ShowWindow(window) end
   love.window.restore()
-  local w, h = love.window.getMode()
-  local dw, dh = love.window.getDesktopDimensions()
-  love.window.setPosition(math.max(0, (dw - w) / 2), math.max(0, (dh - h) / 2))
+  -- Enter desktop fullscreen only at Start/Resume: prewarming must not
+  -- change the display or reveal the game. Refresh SDL after mode changes.
+  if not love.window.getFullscreen() then
+    love.window.setPosition(0, 0)
+    love.window.setFullscreen(true, "desktop")
+  end
+  native_window()
   if sdl then sdl.SDL_RaiseWindow(window) end
   love.window.requestAttention()
 end

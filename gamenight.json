@@ -23,7 +23,6 @@
     "protocol": 1
   },
   "links": {
-    "source": "https://github.com/joepio/pinpals/tree/gamenight-integration",
-    "upstream": "https://github.com/Polleps/pinpals"
+    "source": "https://github.com/Polleps/pinpals"
   }
 }
