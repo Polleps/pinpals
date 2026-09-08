@@ -12,7 +12,7 @@ echoed in the initial `hello`, never printed.
 
 - `prepare` creates both physics worlds, binds party seats, and sends `ready`.
   The window stays hidden (minimized if native SDL symbols are unavailable) and the simulation is frozen until `start`.
-- `start` restores the window and begins play. `pause` stops audio, releases
+- `start` opens desktop fullscreen and begins play. `pause` stops audio, releases
   held controls, freezes simulation, and hides the window; `resume` restores play.
 - `dispose` destroys both worlds and clears inputs. The same process accepts
   the next `prepare`, including mid-match skips and replay.
@@ -56,4 +56,12 @@ The JSON codec is vendored from [rxi/json.lua](https://github.com/rxi/json.lua)
   Skips: no direct binary download, no `finished` replay vote, no match settings.
 - Instrumented graphical launch: window invisible in idle/ready/paused, visible
   in running; player-name screenshot inspected; socket closure exited with code 0.
-- Physical controllers and macOS/Windows focus behavior still need a couch run.
+- Native Windows: all checks pass with the physics suite running under Windows
+  LÖVE; hidden prewarming, fullscreen presentation and hiding on pause were
+  visually checked. A physical-controller couch run confirmed LB/RB input and
+  focus handoff from the Windows GameNight lobby.
+- Windows requires the foreground lobby to grant foreground permission when
+  starting/resuming an already warm game (`AllowSetForegroundWindow`). That
+  launcher-side change belongs to GameNight, not this repository.
+- A simultaneous two-controller couch run and macOS focus behavior remain
+  unverified.
