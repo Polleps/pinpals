@@ -11,6 +11,8 @@ std = "luajit"
 -- error rather than a silent dependency.
 files["sim"]      = { read_globals = { "love" } }  -- love.physics only (§11)
 files["app"]      = { read_globals = { "love" } }
+-- Unmodified MIT dependency: upstream intentionally leaves these arguments unused.
+files["app/vendor/json.lua"] = { ignore = { "212", "213" } }
 files["tests"]    = { read_globals = { "love" } }
 
 -- main.lua and conf.lua define the love.* callbacks, so they write the table

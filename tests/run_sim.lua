@@ -10,9 +10,12 @@ return function()
   require("tests.app.inspect_spec")(H)
   require("tests.app.render_spec")(H)
   require("tests.app.input_spec")(H)
+  require("tests.app.gamenight_input_spec")(H)
+  require("tests.app.gamenight_transport_spec")(H)
   local core_ok = H.report("core")
   H.reset()
   require("tests.sim.spec")(H)
+  require("tests.sim.gamenight_spec")(H)
   local sim_ok = H.report("sim (headless love.physics)")
   return core_ok and sim_ok
 end
