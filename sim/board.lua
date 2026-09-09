@@ -356,10 +356,12 @@ end
 
 --- A ball arriving out of the tube. §5: exit velocity survives the trip; the
 --- entry point decides the direction it arrives from.
-function Board:arrive(speed)
+function Board:arrive(speed, aim)
   local e = self.def.entry
   local len = math.sqrt(e.dir.x * e.dir.x + e.dir.y * e.dir.y)
-  self:spawn(e.x, e.y, e.dir.x / len * speed, e.dir.y / len * speed)
+  local vx, vy = e.dir.x / len * speed, e.dir.y / len * speed
+  local c, s = math.cos(aim or 0), math.sin(aim or 0)
+  self:spawn(e.x, e.y, vx * c - vy * s, vx * s + vy * c)
 end
 
 ---------------------------------------------------------------------------

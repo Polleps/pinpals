@@ -194,7 +194,8 @@ end
 --- operator can see how long they have left to rearrange the floor.
 ---
 --- Drawn in board space, inside the receiving board's transform.
-local function draw_incoming(def, u)
+local function draw_incoming(def, incoming)
+  local u = incoming.u
   local e = def.entry
   local lg = love.graphics
   -- Entry points sit against a wall by construction -- the ball arrives
@@ -211,12 +212,20 @@ local function draw_incoming(def, u)
     lg.setLineWidth(2)
     lg.circle("line", e.x, e.y, 10 + span * (1 - ru))
   end
-  -- The arrival vector, so "where" is as clear as "when".
-  lg.setColor(0.6, 1, 0.75, 0.35 + 0.45 * u)
-  lg.setLineWidth(2 + 2 * u)
-  lg.line(e.x, e.y, e.x + e.dir.x * 34, e.y + e.dir.y * 34)
-  lg.setColor(0.6, 1, 0.75, 0.25 + 0.6 * u)
-  lg.circle("fill", e.x, e.y, 4 + 3 * u)
+  -- A large arrow previews exactly the direction used by Board:arrive.
+  local angle = math.atan2(e.dir.y, e.dir.x) + incoming.aim
+  local dx, dy = math.cos(angle), math.sin(angle)
+  local tipx, tipy = e.x + dx * 115, e.y + dy * 115
+  lg.setColor(0.03, 0.12, 0.09, 0.9)
+  lg.setLineWidth(13)
+  lg.line(e.x, e.y, tipx, tipy)
+  lg.setColor(0.6, 1, 0.75, 1)
+  lg.setLineWidth(7)
+  lg.line(e.x, e.y, tipx - dx * 18, tipy - dy * 18)
+  lg.polygon("fill", tipx, tipy,
+    tipx - dx * 28 - dy * 16, tipy - dy * 28 + dx * 16,
+    tipx - dx * 28 + dy * 16, tipy - dy * 28 - dx * 16)
+  lg.circle("fill", e.x, e.y, 7)
 end
 
 ---------------------------------------------------------------------------
@@ -775,7 +784,7 @@ local function draw_transit(state, defs)
 
   love.graphics.setFont(fonts.body)
   love.graphics.setColor(0.55, 0.95, 0.7, 0.9)
-  local msg = ("IN TRANSIT  %.2fs   arriving at %.0f px/s   RALLY %d")
+  local msg = ("SENDER: FLIPPERS AIM   |   IN TRANSIT %.2fs   %.0f px/s   RALLY %d")
     :format(t.duration - t.t, t.speed, state.stats.relay)
   love.graphics.printf(msg, 0, H - 74, W, "center")
 
@@ -845,7 +854,7 @@ local function hud_roles(x, y, legend, active, transit)
     love.graphics.setFont(fonts.small)
     love.graphics.print(flip
       and ("%s / %s"):format(L.flip_left, L.flip_right)
-      or  ("%s post  %s/%s guard"):format(L.operator_paddle,
+      or  (transit and "%s post  %s/%s AIM" or "%s post  %s/%s guard"):format(L.operator_paddle,
                                                    L.flip_left, L.flip_right), x + 120, y + 3)
     love.graphics.setFont(fonts.body)
     y = y + 22
@@ -1212,7 +1221,7 @@ function M.draw(match, legend, flags)
   for _, id in ipairs({ "a", "b" }) do
     draw_board(match.defs[id], match.cur[id], match.prev[id], match.alpha,
                M.view[id], id == state.active, heat,
-               (t and id == t.to) and incoming_u or nil, state.boards[id])
+               (t and id == t.to) and { u = incoming_u, aim = t.aim or 0 } or nil, state.boards[id])
   end
   if state.phase == "transit" then draw_transit(state, match.defs) end
   HA = M.hud_a

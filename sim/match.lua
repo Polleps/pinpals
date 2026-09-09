@@ -78,7 +78,7 @@ function Match:_tick()
     if cmd.kind == "serve" then
       self.boards[cmd.board]:serve()
     elseif cmd.kind == "arrive" then
-      self.boards[cmd.board]:arrive(cmd.speed)
+      self.boards[cmd.board]:arrive(cmd.speed, cmd.aim)
     end
   end
 

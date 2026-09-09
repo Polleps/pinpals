@@ -93,6 +93,14 @@ function M.apply_intent(s, it)
   local board = s.boards[s.active]
   if not board then return end
 
+  -- During flight the sender aims the receiver's launch instead of toggling
+  -- the guard. Keep held aiming input local to this pass.
+  if s.phase == "transit" and s.transit and role == "operator"
+     and intents.FLIPPER_ACTIONS[it.action] then
+    s.transit[it.action] = it.pressed
+    return
+  end
+
   -- §6.2 The outlane guard. The operator's flipper buttons are the two
   -- controls their role otherwise leaves them nothing to do with, so they
   -- move the barrier: either button switches it to the other outlane.
@@ -118,7 +126,7 @@ function M.apply_intent(s, it)
 
   if role == "flipper" then
     if it.action == "flip_left" or it.action == "flip_right" then
-      if s.phase ~= "play" then return end      -- no ball, no flippers
+      if s.phase ~= "play" then return end
       if it.action == "flip_left"  then board.flippers.left  = it.pressed end
       if it.action == "flip_right" then board.flippers.right = it.pressed end
       return
@@ -267,11 +275,14 @@ function M.update(s)
 
   elseif s.phase == "transit" then
     local t = s.transit
+    local steer = (t.flip_left and 1 or 0) - (t.flip_right and 1 or 0)
+    t.aim = math.max(-C.TRANSIT_AIM_LIMIT, math.min(C.TRANSIT_AIM_LIMIT,
+      (t.aim or 0) + steer * C.TRANSIT_AIM_RATE * dt))
     t.t = t.t + dt
     if t.t >= t.duration then
       s.phase = "play"
       s.transit = nil
-      cmds[#cmds+1] = { kind = "arrive", board = t.to, speed = t.speed }
+      cmds[#cmds+1] = { kind = "arrive", board = t.to, speed = t.speed, aim = t.aim }
     end
   end
 
@@ -319,7 +330,7 @@ function M.consume(s, events)
       local speed = math.max(C.TRANSIT_MIN_SP, math.min(C.TRANSIT_MAX_SP, scaled))
       release_flippers(s)
       s.phase   = "transit"
-      s.transit = { from = from, to = to, t = 0, duration = C.TRANSIT_TIME, speed = speed }
+      s.transit = { from = from, to = to, t = 0, duration = C.TRANSIT_TIME, speed = speed, aim = 0 }
       -- The destination board becomes active immediately: for the ~800ms of
       -- flight the sender is already the operator over there, rearranging the
       -- floor the ball is about to land on.

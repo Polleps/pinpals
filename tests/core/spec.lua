@@ -266,6 +266,41 @@ return function(H)
   end)
 
   describe("the pass", function()
+    it("lets only the sender aim, stops on release, and carries the bounded angle", function()
+      for _, from in ipairs({ "a", "b" }) do
+        local s = state.new(boards); s.phase, s.active = "play", from
+        state.consume(s, { { kind = "tube", board = from, speed = 1500 } })
+        local sender = from == "a" and 1 or 2
+        local receiver = 3 - sender
+        local guard = s.boards[s.active].guard
+        state.apply_intent(s, intents.new(receiver, "flip_left", true, 0))
+        state.update(s)
+        A.equal(0, s.transit.aim)
+        state.apply_intent(s, intents.new(sender, "flip_left", true, 0))
+        state.update(s)
+        A.truthy(s.transit.aim > 0)
+        A.equal(guard, s.boards[s.active].guard)
+        state.apply_intent(s, intents.new(sender, "flip_right", true, 0))
+        local held = s.transit.aim
+        state.update(s)
+        A.equal(held, s.transit.aim, "both buttons cancel")
+        state.apply_intent(s, intents.new(sender, "flip_left", false, 0))
+        for _ = 1, 75 do state.update(s) end
+        A.equal(-C.TRANSIT_AIM_LIMIT, s.transit.aim)
+        state.apply_intent(s, intents.new(sender, "flip_right", false, 0))
+        state.update(s)
+        A.equal(-C.TRANSIT_AIM_LIMIT, s.transit.aim)
+        local arrival
+        while s.transit do
+          for _, c in ipairs(state.update(s)) do arrival = c end
+        end
+        A.near(-C.TRANSIT_AIM_LIMIT, arrival.aim, 1e-9)
+        A.equal(1500, arrival.speed)
+        state.consume(s, { { kind = "tube", board = s.active, speed = 1500 } })
+        A.equal(0, s.transit.aim, "each pass starts centered")
+      end
+    end)
+
     it("hands the board over and clamps the speed it carries (§5)", function()
       local s = state.new(boards); s.phase = "play"
       state.consume(s, { { kind = "tube", board = "a", speed = 1e9 } })

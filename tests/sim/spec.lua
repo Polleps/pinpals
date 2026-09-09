@@ -14,6 +14,22 @@ return function(H)
   local ramps  = require("core.ramp")
   local boards = require("data.tables.init").load()
 
+  describe("aimed arrival", function()
+    it("rotates launch velocity without changing its speed on either board", function()
+      for _, def in pairs(boards) do
+        local b = Board.new(def, 42)
+        for _, aim in ipairs({ -C.TRANSIT_AIM_LIMIT, 0, C.TRANSIT_AIM_LIMIT }) do
+          b:arrive(1500, aim)
+          local vx, vy = b.ball:getLinearVelocity()
+          local angle = math.atan2(def.entry.dir.y, def.entry.dir.x) + aim
+          A.near(math.cos(angle) * 1500, vx, 0.01)
+          A.near(math.sin(angle) * 1500, vy, 0.01)
+        end
+        b.world:destroy()
+      end
+    end)
+  end)
+
   --- A core-shaped command block, so sim tests don't need core/state.
   --- `guard` is nil by default, which retracts both outlane guards: the older
   --- measurements in this file and in every probe were taken on a board with

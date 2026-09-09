@@ -4,6 +4,9 @@
 
 local C = {}
 
+C.TRANSIT_AIM_LIMIT = math.rad(20)
+C.TRANSIT_AIM_RATE = math.rad(90) -- radians per second while a button is held
+
 -- §4.2 World scale -----------------------------------------------------------
 -- Box2D is tuned for bodies of 0.1m-10m. A real pinball is 27mm, well under
 -- that floor, so the whole game runs at 10x real-world scale.
