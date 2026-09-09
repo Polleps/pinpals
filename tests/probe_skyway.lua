@@ -20,6 +20,16 @@ return function()
   local C      = require("core.constants")
   local Board  = require("sim.board")
   local boards = require("data.tables.init").load()
+  -- Optional layout sweep; normal runs always measure the authored boards.
+  local foot_y = tonumber(os.getenv("PINPALS_RAMP_FOOT_Y"))
+  if foot_y then
+    for _, def in pairs(boards) do
+      for _, r in ipairs(def.ramps) do
+        r.path[2], r.path[#r.path] = foot_y, foot_y
+      end
+      require("core.ramp").prepare(def)
+    end
+  end
 
   local function cmd(gate, post, left, right)
     return { flippers = { left = left or false, right = right or false },
@@ -54,17 +64,19 @@ return function()
     local rested  = cmd(true, false)
     local release = math.floor(0.22 * C.TICK_HZ)
     local c = held
-    local entered, exited, top = false, false, 0
+    local entered, exited, completed, top = false, false, false, 0
     for tick = 1, math.floor(9.0 * C.TICK_HZ) do
       if tick == release then c = rested end
       for _, ev in ipairs(b:step(c, true)) do
         if ev.kind == "ramp" and ev.at == "enter" then entered = true end
-        if ev.kind == "ramp" and ev.at == "exit"  then exited  = true end
+        if ev.kind == "ramp" and ev.at == "exit" then
+          exited, completed = true, ev.complete
+        end
         if ev.kind == "drain" then
-          return entered and (top > 0.9 and "made" or "fell back") or "no entry", top
+          return entered and (completed and "made" or "fell back") or "no entry", top
         end
         if ev.kind == "tube" then
-          return entered and (top > 0.9 and "made" or "fell back") or "no entry", top
+          return entered and (completed and "made" or "fell back") or "no entry", top
         end
       end
       local g = b.on_ramp and b.on_ramp.geom
@@ -72,7 +84,7 @@ return function()
       -- A completed loop is one that crested and then left; a ball that
       -- entered and came back out of the same mouth never reaches the crown.
       if exited and entered then
-        return (top > 0.9) and "made" or "fell back", top
+        return completed and "made" or "fell back", top
       end
     end
     return entered and "stuck on ramp" or "no entry", top

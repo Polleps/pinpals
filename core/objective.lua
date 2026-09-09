@@ -13,6 +13,7 @@
 ---
 --- Pure Lua. Returns a description; decides nothing.
 
+local mission = require("core.mission")
 local C = require("core.constants")
 
 local M = {}
@@ -52,6 +53,12 @@ function M.current(s, names)
   local board  = s.boards[active]
   local other  = s.boards[M.other(active)]
   local function named(id) return (names and names[id]) or id end
+
+  local m = board.mission
+  if m and (m.combo > 0 or m.charge >= mission.GOAL) then
+    return { text = m.combo > 0 and "SHOOT PASS - SKYWAY COMBO" or "SHOOT PASS - RELAY JACKPOT",
+      board = active, urgent = true, here = true }
+  end
 
   -- 1. A lit board is a timer running down on free money. It outranks
   --    everything because it expires and nothing else here does.

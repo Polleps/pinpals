@@ -26,7 +26,7 @@ return function()
       if i % 26 == 0 then
         local s = m.state
         for _, b in pairs(s.boards) do
-          if math.random() < 0.30 then b.devices.gate.commanded = math.random() < 0.65 end
+          if b.devices.gate and math.random() < 0.30 then b.devices.gate.commanded = math.random() < 0.65 end
           if math.random() < 0.20 then b.devices.post.commanded = math.random() < 0.30 end
         end
         local act = s.boards[s.active]

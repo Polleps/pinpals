@@ -86,9 +86,9 @@ return function(H)
 
     it("give devices on the ACTIVE board to the ball-less player", function()
       fresh()
-      state.apply_intent(s, intents.new(2, "operator_gate", true, 0))
-      A.truthy(s.boards.a.devices.gate.commanded, "operator acts on the active board, not their own")
-      A.falsy(s.boards.b.devices.gate.commanded)
+      state.apply_intent(s, intents.new(2, "operator_paddle", true, 0))
+      A.truthy(s.boards.a.devices.post.commanded, "operator acts on the active board, not their own")
+      A.falsy(s.boards.b.devices.post.commanded)
     end)
 
     it("ignore flipper input when there is no ball", function()
@@ -347,11 +347,11 @@ return function(H)
   describe("device commands persist (§7 dormant board keeps its state)", function()
     it("a device left open on a board is still open when you come back", function()
       local s = state.new(boards); s.phase = "play"
-      state.apply_intent(s, intents.new(2, "operator_gate", true, 0))
-      A.truthy(s.boards.a.devices.gate.commanded)
+      state.apply_intent(s, intents.new(2, "operator_paddle", true, 0))
+      A.truthy(s.boards.a.devices.post.commanded)
       state.consume(s, { { kind = "tube", board = "a", speed = 900 } })
       for _ = 1, C.TICK_HZ do state.update(s) end
-      A.truthy(s.boards.a.devices.gate.commanded, "board A forgot what the operator did")
+      A.truthy(s.boards.a.devices.post.commanded, "board A forgot what the operator did")
     end)
 
     it("still lets a player let go of a device after their role swaps",
@@ -364,16 +364,16 @@ return function(H)
       -- §6.2 makes an open gate close the safe return loop, so the ball came
       -- back later to a board whose safe return had quietly gone.
       local s = state.new(boards); s.phase = "play"
-      state.apply_intent(s, intents.new(2, "operator_gate", true, 0))
-      A.truthy(s.boards.a.devices.gate.commanded)
+      state.apply_intent(s, intents.new(2, "operator_paddle", true, 0))
+      A.truthy(s.boards.a.devices.post.commanded)
 
       state.consume(s, { { kind = "tube", board = "a", speed = 900 } })
       for _ = 1, C.TICK_HZ do state.update(s) end
       A.equal("b", s.active)
       A.equal("flipper", intents.role_of(2, s.active), "the role did not swap")
 
-      state.apply_intent(s, intents.new(2, "operator_gate", false, 1))
-      A.truthy(not s.boards.a.devices.gate.commanded,
+      state.apply_intent(s, intents.new(2, "operator_paddle", false, 1))
+      A.truthy(not s.boards.a.devices.post.commanded,
                "board A's gate stayed open after the player let go")
     end)
 
@@ -382,12 +382,12 @@ return function(H)
       -- Routing it to whatever board is active now would close a gate on the
       -- wrong table, which is a different bug wearing the same shape.
       local s = state.new(boards); s.phase = "play"
-      state.apply_intent(s, intents.new(2, "operator_gate", true, 0))
+      state.apply_intent(s, intents.new(2, "operator_paddle", true, 0))
       state.consume(s, { { kind = "tube", board = "a", speed = 900 } })
       for _ = 1, C.TICK_HZ do state.update(s) end
       -- Board B's gate was never touched and must stay that way.
-      state.apply_intent(s, intents.new(2, "operator_gate", false, 1))
-      A.truthy(not s.boards.b.devices.gate.commanded,
+      state.apply_intent(s, intents.new(2, "operator_paddle", false, 1))
+      A.truthy(not s.boards.b.devices.post.commanded,
                "the release closed a gate on the wrong board")
     end)
   end)
@@ -554,18 +554,12 @@ return function(H)
   describe("target banks", function()
     local score = require("core.score")
 
-    --- The board that actually has a bank. Raises rather than returning nil,
-    --- so a board set with no targets at all fails here loudly instead of
-    --- letting every test below quietly pass over an empty list.
-    local function banked_board()
-      for id, def in pairs(boards) do
-        if def.targets and #def.targets > 0 then return id, def end
-      end
-      error("no board has targets: Glasshouse has lost its identity", 2)
-    end
+    local function banked_board() return "b", boards.b end
 
-    it("exists on exactly one board, which is that board's character", function()
-      A.equal("b", (banked_board()), "the target bank moved off Glasshouse")
+    it("offers aimed banks on both boards", function()
+      for _, id in ipairs({ "a", "b" }) do
+        A.truthy(#boards[id].targets >= 2)
+      end
     end)
 
     it("lights a target when it is hit, and pays for it", function()

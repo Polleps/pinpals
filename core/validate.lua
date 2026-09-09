@@ -48,6 +48,18 @@ function M.board(b)
     end
   end
 
+  for i, lane in ipairs(b.rollovers or {}) do
+    local valid = isnum(lane.x) and isnum(lane.y) and isnum(lane.w) and isnum(lane.h)
+    if not valid or lane.w <= 0 or lane.h <= 0 or type(lane.label) ~= "string" then
+      e[#e+1] = ("rollovers[%d]: expected x, y, positive w/h and label"):format(i)
+    elseif type(b.size) == "table" and isnum(b.size.w) and isnum(b.size.h) then
+      if lane.x - lane.w / 2 < 0 or lane.x + lane.w / 2 > b.size.w
+         or lane.y - lane.h / 2 < 0 or lane.y + lane.h / 2 > b.size.h then
+        e[#e+1] = ("rollovers[%d]: outside playfield"):format(i)
+      end
+    end
+  end
+
   -- Slingshots: three points, and a kick that actually kicks. A slingshot
   -- with restitution <= 1 is a wall shaped like a slingshot, which is the
   -- kind of thing that reads fine on screen and silently does nothing.
@@ -130,8 +142,8 @@ function M.board(b)
   -- §6.1: every device must be a persistent state with a real travel time.
   -- A device that snaps is a design bug, so it is a validation error.
   local seen, kinds = {}, {}
-  if type(b.devices) ~= "table" or #b.devices ~= 2 then
-    e[#e+1] = "devices: prototype expects exactly 2 (one gate, one paddle)"
+  if type(b.devices) ~= "table" or #b.devices < 1 then
+    e[#e+1] = "devices: expects at least one device"
   end
   for i, d in ipairs(b.devices or {}) do
     local at = ("devices[%d]"):format(i)
@@ -165,8 +177,8 @@ function M.board(b)
       e[#e+1] = at .. ".kind: expected 'gate' or 'paddle'"
     end
   end
-  if b.devices and #b.devices == 2 and not (kinds.gate and kinds.paddle) then
-    e[#e+1] = "devices: prototype expects one gate and one paddle"
+  if b.devices and not kinds.paddle then
+    e[#e+1] = "devices: expects a paddle"
   end
 
   -- §6.2 The outlane guards. Exactly two, one per side, and a kick that

@@ -97,7 +97,7 @@ function love.load()
     -- Stand in for an operator holding the gate open, so a screenshot can
     -- catch the pass rather than only the safe return loop.
     if shot_open then
-      for _, b in pairs(match.state.boards) do b.devices.gate.commanded = true end
+      for _, b in pairs(match.state.boards) do if b.devices.gate then b.devices.gate.commanded = true end end
     end
     -- --pass puts the ball up the ramp on cue, so the transit and the
     -- handed-over camera can both be captured deterministically.

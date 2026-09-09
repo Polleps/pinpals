@@ -1,3 +1,6 @@
+-- Current layout: skyway feet at y=460; rollover lanes build relay jackpots.
+-- Measurements in the historical design notes below describe earlier layouts.
+-- See docs/gameplay-iteration.md for this revision and reproducible measurements.
 --- Board B - "Glasshouse". Player 2's home board.
 ---
 --- design.md §13.1 -- what is each board FOR? -- answered PROVISIONALLY here
@@ -52,8 +55,6 @@
 --- version of this edit that did it the other way round and broke both
 --- boards' upper content.
 
-local pi = math.pi
-
 return {
   id   = "b",
   name = "Glasshouse",
@@ -68,8 +69,10 @@ return {
     -- board_a.lua for what each chain is and why the outlanes matter. The
     -- inlane floors end further apart here because Glasshouse's flippers
     -- are, which is the board's whole identity.
-    { 36,700,  40,852,  104,864,  140,873 },
-    { 412,700,  408,852,  344,864,  308,873 },
+    { 36, 700, 39, 810,
+      { to = { 140, 873 }, c1 = { 40, 849 }, c2 = { 96, 862 } } },
+    { 412, 700, 409, 810,
+      { to = { 308, 873 }, c1 = { 408, 849 }, c2 = { 352, 862 } } },
     -- The pass ramp, left of centre: the right flipper's cross-body shot,
     -- where Foundry's is the left flipper's. Shortened to end at y=380 for
     -- the reason given at length in board_a.lua -- a long centre channel is a
@@ -103,18 +106,17 @@ return {
 
   bumpers = {},  -- none: chaos is Foundry's job
 
-  -- Two slingshots, one above each flipper, hypotenuse facing up-board and
-  -- roughly parallel to the flipper below it. A ball coming down the side
-  -- meets the face and is thrown back across the playfield instead of rolling
-  -- into the drain, which is what fills the 340px of empty approach the ramp
-  -- vacated when the board grew.
-  --
-  -- The tip stops 28px short of the pivot in x. Closer than that and the
-  -- triangle reaches inside the flipper's swept arc, which the geometry gate
-  -- rejects: at pivot-24 it is 56.3px from the pivot against a 52.96px reach.
+  -- Flush rollover switches add shots without blocking the orbit or return lanes.
+  rollovers = {
+    { x = 38, y = 330, w = 36, h = 26, label = "L" },
+    { x = 410, y = 330, w = 36, h = 26, label = "R" },
+    { x = 224, y = 690, w = 68, h = 26, label = "C" },
+  },
+
+  -- Tall, narrow slings leave a broad return lane behind their outer edge.
   slingshots = {
-    { p = { 66,756,  132,806,  66,814 } },
-    { p = { 382,756, 316,806, 382,814 } },
+    { p = { 84, 714, 132, 806, 84, 814 } },
+    { p = { 364, 714, 316, 806, 364, 814 } },
   },
 
 
@@ -272,11 +274,11 @@ return {
   -- shot -- this is the four-directions-at-once the ramp note warns about.
   targets = {
     { x = 300, y = 480, w = 28, h = 9, angle = 0, bank = "vault" },
-    -- y=466, not 480, and the 14px is a stuck ball -- see the note above.
-    { x = 352, y = 466, w = 28, h = 9, angle = 0, bank = "vault" },
+    -- Above the shortened skyway foot so the right ramp remains shootable.
+    { x = 352, y = 340, w = 28, h = 9, angle = 0, bank = "vault" },
     -- The gallery's second member, out of the plunger lane at last.
     { x = 256, y = 250, w = 28, h = 9, angle = 0, bank = "gallery" },
-    { x = 404, y = 480, w = 28, h = 9, angle = 0, bank = "gallery" },
+    { x = 398, y = 590, w = 28, h = 9, angle = -0.30, bank = "gallery" },
   },
 
   -- The outlane guards. Same numbers as Foundry's, because both bottoms are
@@ -304,20 +306,6 @@ return {
   },
 
   devices = {
-    {
-      id     = "gate",
-      kind   = "gate",
-      travel = 0.30,
-      pivot  = { x = 227, y = 445 },
-      length = 52,
-      closed = pi - 0.13,    -- arm seals the ramp
-      -- 3pi/2, not -pi/2: the gate lerps between these angles, and the negative
-      -- form would sweep the arm the long way round, straight across the ramp.
-      open   = 3 * pi / 2,   -- arm straight up the ramp wall
-      tradeoff = "Opens the pass, closes the safe return loop.",
-      label_closed = "RETURN",
-      label_open   = "PASS",
-    },
     {
       id     = "post",
       kind   = "paddle",
@@ -418,10 +406,10 @@ return {
   ramps = {
     {
       id          = "skyway",
-      path        = { 94, 570,
+      path        = { 94, 460,
                       94, 190, { round = 110 },
                       354, 190, { round = 110 },
-                      354, 570 },
+                      354, 460 },
       width       = 54,
       height      = 30,
       entry_slope = 0.58,

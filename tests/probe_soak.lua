@@ -43,7 +43,7 @@ return function()
     if i % 22 == 0 then
       local s = m.state
       for _, b in pairs(s.boards) do
-        if math.random() < 0.30 then b.devices.gate.commanded = math.random() < 0.6 end
+        if b.devices.gate and math.random() < 0.30 then b.devices.gate.commanded = math.random() < 0.6 end
         if math.random() < 0.25 then b.devices.post.commanded = math.random() < 0.4 end
         -- §6.2 The outlane guard, switched often. The bar sweeps the whole
         -- length of its lane on every change, so this is where a ball ridden

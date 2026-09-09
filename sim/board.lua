@@ -86,6 +86,15 @@ local function build_targets(self, def)
   end
 end
 
+local function build_rollovers(self, def)
+  for i, lane in ipairs(def.rollovers or {}) do
+    local shape = love.physics.newRectangleShape(lane.x, lane.y, lane.w, lane.h)
+    local f = love.physics.newFixture(self.ground, shape, 0)
+    f:setSensor(true)
+    ud(f, "rollover", i)
+  end
+end
+
 local function build_mouth(self, def)
   local m = def.tube.mouth
   local f = love.physics.newFixture(self.ground, love.physics.newCircleShape(m.x, m.y, m.r), 0)
@@ -257,6 +266,7 @@ function Board.new(def, seed)
   build_bumpers(self, def)
   build_slingshots(self, def)
   build_targets(self, def)
+  build_rollovers(self, def)
   build_mouth(self, def)
   build_devices(self, def)
   build_guards(self, def)
@@ -368,6 +378,7 @@ end
 --- got onto the ramp and never came off" is the failure this whole layer has
 --- to be watched for.
 function Board:_mount(r, s)
+  self.ramp_start = s
   self.on_ramp, self.ball_s = r, s
   self:_see("ramp")
   local x, y = self:ball_pos()
@@ -375,13 +386,13 @@ function Board:_mount(r, s)
     { kind = "ramp", board = self.id, id = r.id, at = "enter", x = x, y = y }
 end
 
-function Board:_dismount()
+function Board:_dismount(complete)
   local id = self.on_ramp and self.on_ramp.id
   self.on_ramp, self.ball_s = nil, 0
   self:_see("field")
   local x, y = self:ball_pos()
   self.events[#self.events+1] =
-    { kind = "ramp", board = self.id, id = id, at = "exit", x = x, y = y }
+    { kind = "ramp", board = self.id, id = id, at = "exit", complete = complete or false, x = x, y = y }
 end
 
 --- Is the ball about to commit to a ramp? Only from inside the lane, only
@@ -443,7 +454,9 @@ function Board:_step_ramps()
     local g = self.on_ramp.geom
     local s, lat, tx, ty = ramp.project(g, x, y)
     if s < 0 or s > g.length or math.abs(lat) > g.width / 2 + C.BALL_RADIUS then
-      self:_dismount()
+      local crossed = (self.ramp_start < g.length / 2 and s > g.length)
+                   or (self.ramp_start >= g.length / 2 and s < 0)
+      self:_dismount(crossed and math.abs(lat) <= g.width / 2 + C.BALL_RADIUS)
       return
     end
     self.ball_s = s
@@ -486,6 +499,11 @@ function Board:_begin(fa, fb, _)
   if a.kind == "ball" then other = b elseif b.kind == "ball" then other = a else return end
   if other.kind == "mouth" then
     self.events[#self.events+1] = { kind = "tube", board = self.id, speed = self:ball_speed() }
+
+  elseif other.kind == "rollover" then
+    local lane = self.def.rollovers[other.id]
+    self.events[#self.events+1] = { kind = "rollover", board = self.id,
+      index = other.id, x = lane.x, y = lane.y }
 
   elseif other.kind == "bumper" then
     -- A scoring hit, which is a rule and not a contact: it goes to core/,

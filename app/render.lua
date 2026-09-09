@@ -2,6 +2,7 @@
 --- One shared camera on the active board; the dormant board is a live side
 --- panel; tube transit pulls the camera out to show both boards at once.
 
+local mission = require("core.mission")
 local C       = require("core.constants")
 local intents = require("core.intents")
 local score   = require("core.score")
@@ -257,19 +258,14 @@ local function ramp_meshes(def, th)
       local u = (g.height > 0) and (z / g.height) or 0
       local sx, sy = z * C.RAMP_SHADOW_X, z * C.RAMP_SHADOW_Y
       local lift = 0.40 + 0.60 * u
-      -- Opaque enough to read as a floor the ball runs on rather than a
-      -- tint over the playfield: at the feet it is nearly flush with the
-      -- board and stays faint, and by the crown it hides most of what it
-      -- crosses. Never fully opaque -- a ball travelling underneath still
-      -- has to be findable, which is the whole point of the space a ramp
-      -- frees up.
-      local a = 0.34 + 0.48 * u
+      -- Keep the elevated lane legible without hiding targets beneath it.
+      local a = 0.15 + 0.15 * u
       for _, p in ipairs({ { lx, ly }, { rx, ry } }) do
         surface[#surface+1] = {
           p[1], p[2], 0, 0,
           th.wall[1] * lift, th.wall[2] * lift, th.wall[3] * lift, a,
         }
-        shadow[#shadow+1] = { p[1] + sx, p[2] + sy, 0, 0, 0, 0, 0, 0.06 + 0.44 * u }
+        shadow[#shadow+1] = { p[1] + sx, p[2] + sy, 0, 0, 0, 0, 0, 0.04 + 0.16 * u }
       end
     end
 
@@ -622,6 +618,36 @@ local function draw_effects_and_ball(ctx)
 end
 
 --- The label, and the §7 flag when this board's cross-board state moved.
+local function draw_shot_inserts(ctx)
+  local m = ctx.bstate and ctx.bstate.mission
+  if not m then return end
+  love.graphics.setFont(fonts.small)
+  for i, lane in ipairs(ctx.def.rollovers or {}) do
+    local lit = m.lanes[i]
+    love.graphics.setColor(0.4, 0.95, 0.85, (lit and 0.8 or 0.22) * ctx.dim)
+    love.graphics.ellipse("fill", lane.x, lane.y, lane.w / 2, lane.h / 2)
+    love.graphics.setColor(0.6, 1, 0.9, 0.8 * ctx.dim)
+    love.graphics.printf(lane.label, lane.x - 20, lane.y - 7, 40, "center")
+  end
+  for _, t in ipairs(ctx.def.targets or {}) do
+    love.graphics.setColor(0.9, 0.85, 0.65, 0.75 * ctx.dim)
+    love.graphics.printf(t.bank:upper(), t.x - 32, t.y + 13, 64, "center")
+  end
+  local ready = m.charge >= mission.GOAL
+  love.graphics.setColor(1, 0.78, 0.28, (ready and 1 or 0.6) * ctx.dim)
+  love.graphics.printf(ready and "SHOOT PASS - JACKPOT" or "BUILD THE RELAY", 84, 608, 280, "center")
+  for i = 1, mission.GOAL do
+    love.graphics.setColor(1, 0.78, 0.28, (i <= m.charge and 0.95 or 0.12) * ctx.dim)
+    love.graphics.circle("fill", 154 + (i - 1) * 20, 638, 6)
+  end
+  love.graphics.setColor(0.6, 0.95, 1, 0.8 * ctx.dim)
+  for _, r in ipairs(ctx.def.ramps or {}) do
+    for _, k in ipairs({ 1, #r.path - 1 }) do
+      love.graphics.printf("SKYWAY", r.path[k] - 36, r.path[k + 1] + 8, 72, "center")
+    end
+  end
+end
+
 local function draw_nameplate(ctx, th)
   -- §7: the panel flags cross-board changes, so what you built on the board
   -- you are not looking at is never something you have to remember.
@@ -673,6 +699,7 @@ local function draw_board(def, snap, prev, alpha, view, active, heat, incoming, 
   love.graphics.setScissor(view.x + sx0 * view.s, view.y + sy0 * view.s,
                            (sx1 - sx0) * view.s, (def.size.h - sy0) * view.s)
 
+  draw_shot_inserts(ctx)
   draw_drain_line(ctx)
   draw_shadows(ctx, th)
   draw_walls(ctx, th)
@@ -818,7 +845,7 @@ local function hud_roles(x, y, legend, active, transit)
     love.graphics.setFont(fonts.small)
     love.graphics.print(flip
       and ("%s / %s"):format(L.flip_left, L.flip_right)
-      or  ("%s gate  %s post  %s/%s guard"):format(L.operator_gate, L.operator_paddle,
+      or  ("%s post  %s/%s guard"):format(L.operator_paddle,
                                                    L.flip_left, L.flip_right), x + 120, y + 3)
     love.graphics.setFont(fonts.body)
     y = y + 22
@@ -1011,8 +1038,40 @@ end
 
 --- The panel between the two boards. Split out of a 174-line function; each
 --- helper draws one block and returns the y cursor for the next.
+local function hud_mission(state, x, y)
+  local m = state.boards[state.active].mission
+  local ready = m.charge >= mission.GOAL
+  love.graphics.setFont(fonts.small)
+  col(0.6, 0.95, 0.9, 0.8)
+  love.graphics.print("RELAY RUN  /  BUILD - PASS - CASH", x, y)
+  love.graphics.setFont(fonts.head)
+  col(1, 0.8, 0.35)
+  love.graphics.print(ready and "JACKPOT READY" or ("CHARGE  %d / 8"):format(m.charge), x, y + 25)
+  bar(x, y + 63, 310, 8, m.charge / mission.GOAL, 1, 0.78, 0.28)
+  love.graphics.setFont(fonts.body)
+  col(1, 1, 1, 0.8)
+  love.graphics.print(ready and "Link open. Flipper: shoot PASS."
+    or "Light lanes, hit targets, or ride the skyway.", x, y + 88)
+  love.graphics.setFont(fonts.small)
+  col(1, 1, 1, 0.5)
+  love.graphics.print("Bumpers / new targets / new lanes +1   Bank / skyway +3", x, y + 114)
+  love.graphics.print("8 charge lights a 2,500 jackpot. Pass to collect; repeat to grow it.", x, y + 134)
+  love.graphics.print("All 3 lanes: +500   Skyway: +750   Skyway then pass: +1,500", x, y + 154)
+  col(0.55, 0.95, 1)
+  if (state.shot_notice_time or 0) > 0 then
+    love.graphics.print(state.shot_notice, x, y + 185)
+  elseif m.combo > 0 then
+    love.graphics.print(("PASS COMBO LIT  %.1fs"):format(m.combo), x, y + 185)
+  elseif m.notice_time > 0 then
+    love.graphics.print(m.notice, x, y + 185)
+  else
+    love.graphics.print(("%d jackpots collected   %d skyway rides"):format(m.jackpots, m.rides), x, y + 185)
+  end
+end
+
 local function draw_hud(state, defs, snaps, legend)
   local x, y   = M.hud_x, math.floor(H * 0.49)
+  hud_mission(state, x, 52)
   local active = state.active
   local def    = defs[active]
   local transit = state.phase == "transit"

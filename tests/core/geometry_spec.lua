@@ -107,22 +107,28 @@ return function(H)
     end)
 
     it("a gate too short to seal the ramp", function()
-      local b = broken(function(x) x.devices[1].length = 30 end)
+      local b = broken(function(x)
+        table.insert(x.devices, { id = "gate", kind = "gate", pivot = { x = 210, y = 445 },
+          length = 30, closed = 0.13, open = -1.57 })
+      end)
       A.truthy(kinds(b)["gate-leaks"], "a gate that does not reach the wall was not reported")
     end)
 
     it("a gate that barely opens", function()
-      local b = broken(function(x) x.devices[1].open = -0.6 end)
+      local b = broken(function(x)
+        table.insert(x.devices, { id = "gate", kind = "gate", pivot = { x = 210, y = 445 },
+          length = 52, closed = 0.13, open = -0.6 })
+      end)
       A.truthy(kinds(b)["gate-blocks"], "a gate leaving 4.6px of clearance was not reported")
     end)
 
     it("a post that does not cover the drain gap", function()
-      local b = broken(function(x) x.devices[2].up.x = 120 end)
+      local b = broken(function(x) x.devices[1].up.x = 120 end)
       A.truthy(kinds(b)["post-misses"], "a post guarding nothing was not reported")
     end)
 
     it("a post that never retracts out of play", function()
-      local b = broken(function(x) x.devices[2].down.y = 700 end)
+      local b = broken(function(x) x.devices[1].down.y = 700 end)
       A.truthy(kinds(b)["post-stuck-out"], "a post left in the playfield was not reported")
     end)
   end)

@@ -247,6 +247,10 @@ function A.consume(events, state)
       if voice then
         play(voice, impact_gain(ev.impulse), impact_pitch(ev.impulse) * heat)
       end
+    elseif ev.kind == "award" and ev.value >= 2500 then
+      play("rescue", 0.8, 1.2)
+    elseif ev.kind == "award" and (ev.what == "rollover" or ev.what == "ramp") then
+      play("arrive", 0.45, ev.what == "ramp" and 1.3 or 1.7)
     elseif ev.kind == "tube" then
       play("depart", 0.85, heat)
     elseif ev.kind == "drain" then

@@ -42,6 +42,7 @@ end
 --- identities in numbers: a bumper is chaos you did not aim, a target is a
 --- shot you meant, and a bank is a sequence you and your partner planned.
 local BASE = {
+  lane = 75, lanes = 500, ramp = 750, combo = 1500, jackpot = 2500,
   pass   = C.SCORE_PASS,
   bumper = C.SCORE_BUMPER,
   sling  = C.SCORE_SLING,
@@ -51,7 +52,7 @@ local BASE = {
 }
 
 --- What one scoring event is worth right now.
----@param kind "pass"|"bumper"|"sling"|"guard"|"target"|"bank"
+---@param kind string
 ---@param relay integer
 ---@param boost? number cross-board multiplier on top of relay heat (§7)
 ---@return integer
@@ -70,7 +71,7 @@ end
 --- makes `best_rally` the number that actually answers §14: how good was the
 --- best thing these two players managed together?
 ---@param stats table
----@param kind "pass"|"bumper"|"sling"|"guard"|"target"|"bank"
+---@param kind string
 ---@return integer awarded
 ---@param boost? number
 function M.award(stats, kind, boost)

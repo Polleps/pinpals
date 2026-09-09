@@ -34,12 +34,29 @@ return function(H)
     end
   end
 
+  describe("rollover switches", function()
+    it("scores a crossing without blocking or bouncing the ball", function()
+      local b = Board.new(boards.a)
+      b:spawn(224, 650, 0, 300)
+      local evs = {}
+      run(b, 0.16, cmd(), evs)
+      local hits = 0
+      for _, ev in ipairs(evs) do
+        if ev.kind == "rollover" and ev.index == 3 then hits = hits + 1 end
+      end
+      local _, y = b:ball_pos()
+      local _, vy = b.ball:getLinearVelocity()
+      A.equal(1, hits)
+      A.truthy(y > 690 and vy > 300, "the flush switch obstructed a falling ball")
+    end)
+  end)
+
   describe("world construction", function()
     for _, id in ipairs({ "a", "b" }) do
       it(id .. " builds with two flippers and two devices", function()
         local b = Board.new(boards[id])
         A.truthy(b.flippers.left and b.flippers.right)
-        A.truthy(b.devices.gate and b.devices.post)
+        A.truthy(not b.devices.gate and b.devices.post)
         A.equal(64, love.physics.getMeter(), "world scale must come from constants (§4.2)")
       end)
     end
@@ -196,56 +213,22 @@ return function(H)
     end)
   end)
 
-  describe("the gate (§6.2: opens the pass, closes the safe return)", function()
-    -- Just inside the ramp mouth, derived from the tube rather than written
-    -- out: the channel is centred on the mouth on both boards, so this spawn
-    -- follows the ramp when the board data moves it. It used to be the literal
-    -- (215, 520), which silently stopped being inside the channel the moment
-    -- the board grew.
-    local RAMP_DROP = 352
-    local function in_ramp(def)
-      return def.tube.mouth.x, def.tube.mouth.y + RAMP_DROP
-    end
-
-    it("closed, a shot up the ramp comes back down instead of passing", function()
-      local def = boards.a
-      local b = Board.new(def)
-      local ev = {}
-      local rx, ry = in_ramp(def)
-      b:spawn(rx, ry, 0, -C.SERVE_SPEED)
-      run(b, 2.0, cmd(false, false), ev)
-      for _, e in ipairs(ev) do A.truthy(e.kind ~= "tube", "the ball passed through a closed gate") end
-      local _, y = b:ball_pos()
-      A.truthy(y > def.tube.mouth.y + 130,
-               "the ball should have been returned down the lane, y=" .. tostring(y))
-    end)
-
-    it("open, the same shot reaches the tube", function()
-      local def = boards.a
-      local b = Board.new(def)
-      local c = cmd(true, false)
-      run(b, 0.40, c)                       -- let the gate finish travelling
-      A.between(0.98, 1.02, b:device_progress("gate"))
-      local ev = {}
-      local rx, ry = in_ramp(def)
-      b:spawn(rx, ry, 0, -C.SERVE_SPEED)
-      run(b, 1.5, c, ev)
-      local passed = false
-      for _, e in ipairs(ev) do if e.kind == "tube" then passed = true end end
-      A.truthy(passed, "an open gate did not let the ball through")
-    end)
-
-    it("takes its stated travel time, both ways (§6.1)", function()
+  describe("always-open board links", function()
+    it("passes on both boards without an operator command", function()
       for _, id in ipairs({ "a", "b" }) do
-        local b = Board.new(boards[id])
-        local travel = boards[id].devices[1].travel
-        run(b, travel * 0.45, cmd(true, false))
-        A.between(0.30, 0.70, b:device_progress("gate"),
-                  id .. ": gate should be roughly half open half-way through")
-        run(b, travel * 0.60, cmd(true, false))
-        A.between(0.98, 1.02, b:device_progress("gate"), id .. ": gate never finished opening")
-        run(b, travel * 1.10, cmd(false, false))
-        A.between(-0.02, 0.02, b:device_progress("gate"), id .. ": gate never closed again")
+        for _, commanded in ipairs({ false, true }) do
+          local def = boards[id]
+          local b = Board.new(def, 7919)
+          A.falsy(b.devices.gate)
+          b:spawn(def.tube.mouth.x, def.tube.mouth.y + 352, 0, -C.SERVE_SPEED)
+          local events = {}
+          run(b, 1.5, cmd(commanded, false), events)
+          local passed = false
+          for _, event in ipairs(events) do
+            if event.kind == "tube" then passed = true end
+          end
+          A.truthy(passed, id .. ": link must stay open")
+        end
       end
     end)
   end)
@@ -746,7 +729,6 @@ return function(H)
       local m = Match.new(boards)
       local s = m.state
       -- P2 operates board A: hold the gate open so the ramp shot is a pass.
-      s.boards.a.devices.gate.commanded = true
       for _ = 1, C.TICK_HZ do m:run(1) end                  -- let the serve happen
       A.equal("play", s.phase)
       -- Stand in for a made ramp shot: the aiming is covered elsewhere, this
@@ -770,7 +752,6 @@ return function(H)
 
     it("keeps exactly one ball in existence at all times", function()
       local m = Match.new(boards)
-      m.state.boards.a.devices.gate.commanded = true
       for _ = 1, C.TICK_HZ * 12 do
         m:run(1)
         local n = 0
@@ -970,7 +951,7 @@ return function(H)
         if i % 22 == 0 then
           local st = m.state
           for _, b in pairs(st.boards) do
-            if math.random() < 0.3 then b.devices.gate.commanded = math.random() < 0.6 end
+            if b.devices.gate and math.random() < 0.3 then b.devices.gate.commanded = math.random() < 0.6 end
             if math.random() < 0.25 then b.devices.post.commanded = math.random() < 0.4 end
           end
           local act = st.boards[st.active]
@@ -1058,7 +1039,6 @@ return function(H)
       -- even if one reaches it -- is asserted in the core spec, where it
       -- needs no physics.
       local m = Match.new(boards)
-      m.state.boards.a.devices.gate.commanded = true
       local kinds = {}
       for _ = 1, C.TICK_HZ * 6 do
         m:run(1)
@@ -1071,7 +1051,6 @@ return function(H)
       -- A headless run never drains, so an uncapped feed grows one table per
       -- contact for the length of the test.
       local m = Match.new(boards)
-      m.state.boards.a.devices.gate.commanded = true
       m:run(C.TICK_HZ * 20)
       A.truthy(#m.feed <= 96, "feed grew unbounded: " .. #m.feed)
     end)
@@ -1155,12 +1134,14 @@ return function(H)
     it("puts the ball on the ramp and takes it off again", function()
       local evs = {}
       local b = launch(1600, evs)
-      local enter, exit = 0, 0
+      local enter, exit, complete = 0, 0, 0
       for _, ev in ipairs(evs) do
         if ev.kind == "ramp" then
           if ev.at == "enter" then enter = enter + 1 else exit = exit + 1 end
+          if ev.complete then complete = complete + 1 end
         end
       end
+      A.truthy(complete > 0, "full ride must report completion for scoring")
       A.truthy(enter > 0, "a 1600px/s shot into the mouth never got on the ramp")
       A.equal(enter, exit, "the ball got on the ramp more often than it got off")
       A.equal(nil, b.on_ramp, "the ball was left stranded on the ramp layer")
@@ -1186,14 +1167,19 @@ return function(H)
       A.equal(0, b:ball_z(), "a ball on the playfield reported a height")
     end)
 
+    -- Keep the collision-layer test independent of the authored bumper layout.
+    local function bumper_under_crown()
+      local fixture = {}
+      for key, value in pairs(def) do fixture[key] = value end
+      local x, y = ramps.point_at(geom, geom.length / 2)
+      local bumper = { x = x, y = y, r = 22, restitution = 1.15 }
+      fixture.bumpers = { bumper }
+      return fixture, bumper
+    end
+
     it("carries the ball OVER the bumpers it crosses", function()
-      -- The whole point of an elevated lane, and the one thing CLAUDE.md's
-      -- stacking rule could not previously allow: Foundry's west and east
-      -- bumpers sit directly under the skyway's arcs. A ball on the ramp has
-      -- to cross them without touching, and a ball on the playfield has to
-      -- reach them exactly as it did before.
-      local w = def.bumpers[2]
-      local b = Board.new(def)
+      local fixture, w = bumper_under_crown()
+      local b = Board.new(fixture)
       spawn_into(b, 1600)
       local hits, crossed = 0, false
       for _ = 1, 6 * C.TICK_HZ do
@@ -1217,13 +1203,13 @@ return function(H)
     end)
 
     it("still lets a playfield ball hit the bumper under the ramp", function()
-      local w = def.bumpers[2]
+      local fixture, w = bumper_under_crown()
       local evs = {}
-      local b = Board.new(def)
+      local b = Board.new(fixture)
       b:spawn(w.x, w.y - w.r - C.BALL_RADIUS - 30, 0, 260)
       run(b, 2.0, cmd(), evs)
       local hit = false
-      for _, ev in ipairs(evs) do if ev.kind == "bumper" and ev.index == 2 then hit = true end end
+      for _, ev in ipairs(evs) do if ev.kind == "bumper" and ev.index == 1 then hit = true end end
       A.truthy(hit, "the bumper under the ramp became unreachable from the playfield")
     end)
 

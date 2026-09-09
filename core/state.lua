@@ -9,6 +9,8 @@ local C       = require("core.constants")
 local intents = require("core.intents")
 local score   = require("core.score")
 
+local mission = require("core.mission")
+
 local M = {}
 
 local OTHER = { a = "b", b = "a" }
@@ -43,6 +45,7 @@ function M.new(boards)
   }
   for id, def in pairs(boards) do
     local b = {
+      mission = mission.new(), lane_count = #(def.rollovers or {}),
       id = id, flippers = { left = false, right = false },
       devices = {}, targets = {}, banks = {},
       -- §7 cross-board state. `meters` is what the OTHER board has been
@@ -173,6 +176,7 @@ function M.update(s)
   local dt = C.FIXED_DT
   s.tick = s.tick + 1
   s.time = s.time + dt
+  s.shot_notice_time = math.max(0, (s.shot_notice_time or 0) - dt)
   -- One-frame signal for app/: what was just scored and where. Cleared here
   -- rather than by the reader, so nothing depends on someone remembering to.
   s.last_award = nil
@@ -183,7 +187,8 @@ function M.update(s)
   -- in every phase. A cooldown that only ran on the active board would mean a
   -- guard spent on Foundry is still spent when you come back to it ten passes
   -- later, which turns a per-ball cost into a permanent one.
-  for _, b in pairs(s.boards) do
+  for id, b in pairs(s.boards) do
+    mission.update(b.mission, dt, s.phase == "play" and s.active == id)
     if (b.guard_cooldown or 0) > 0 then
       b.guard_cooldown = math.max(0, b.guard_cooldown - dt)
     end
@@ -325,7 +330,7 @@ function M.consume(s, events)
       -- Awarded at the NEW heat: the crossing that makes the rally hotter is
       -- itself worth the hotter rate, so the escalation is visible on the
       -- pass that earned it rather than one pass late.
-      s.last_award = { kind = "pass", value = score.award(s.stats, "pass"), board = to }
+      s.last_award = { kind = "pass", value = score.award(s.stats, "pass") + mission.shot(s, ev), board = to }
 
     elseif ev.kind == "target" and s.phase == "play" then
       local board = s.boards[ev.board]
@@ -337,6 +342,7 @@ function M.consume(s, events)
         local total = score.award(s.stats, "target")
         if not t.lit then
           t.lit = true
+          mission.charge(board.mission, 1)
           local bank = board.banks[t.bank]
           if bank and M.bank_complete(board, bank) then
             -- §7's payoff. The bonus is scaled by everything the partner
@@ -348,6 +354,7 @@ function M.consume(s, events)
             total = total + score.award(s.stats, "bank", 1 + charge)
             board.meters[t.bank] = 0
             bank.cleared = bank.cleared + 1
+            mission.charge(board.mission, 3)
             for _, mi in ipairs(bank.members) do board.targets[mi].lit = false end
             fire_links(s, ev.board, "bank:" .. t.bank)
           end
@@ -400,8 +407,16 @@ function M.consume(s, events)
         board = ev.board, x = ev.x, y = ev.y, boosted = boost > 1,
       }
       fire_links(s, ev.board, "bumper")
+      mission.charge(board.mission, 1)
+
+    elseif (ev.kind == "rollover" or ev.kind == "ramp") and s.phase == "play" then
+      local value = mission.shot(s, ev)
+      if value > 0 then
+        s.last_award = { kind = ev.kind, value = value, board = ev.board, x = ev.x, y = ev.y }
+      end
 
     elseif ev.kind == "drain" and s.phase == "play" then
+      s.boards[ev.board].mission.combo = 0
       -- Not dead yet (§8). The rally, the score it has earned and the drain
       -- count all stay untouched until purgatory actually expires, so a
       -- rescue costs the team nothing it had already earned.

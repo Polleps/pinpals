@@ -28,7 +28,7 @@ return function()
         local s = match.state
         for _, b in pairs(s.boards) do
           if math.random() < 0.25 then
-            b.devices.gate.commanded = math.random() < 0.5
+            if b.devices.gate then b.devices.gate.commanded = math.random() < 0.5 end
           end
           if math.random() < 0.25 then
             b.devices.post.commanded = math.random() < 0.5

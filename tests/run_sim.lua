@@ -2,6 +2,7 @@
 return function()
   local H = require("tests.harness")
   require("tests.core.spec")(H)
+require("tests.core.mission_spec")(H)
   require("tests.core.geometry_spec")(H)
   require("tests.core.curve_spec")(H)
   require("tests.data.reload_spec")(H)

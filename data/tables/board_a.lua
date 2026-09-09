@@ -1,3 +1,6 @@
+-- Current layout: skyway feet at y=460; rollover lanes build relay jackpots.
+-- Measurements in the historical design notes below describe earlier layouts.
+-- See docs/gameplay-iteration.md for this revision and reproducible measurements.
 --- Board A - "Foundry". Player 1's home board.
 ---
 --- Character: chaotic and forgiving, and as of this edit that is measured
@@ -50,8 +53,6 @@
 --- reachability tests caught it. Worth recording: there is no such thing as a
 --- neutral resize here, only a choice about where the new room goes.
 
-local pi = math.pi
-
 return {
   id         = "a",
   name       = "Foundry",
@@ -63,7 +64,7 @@ return {
     -- Outer shell: left wall, top arc, right wall. Both side walls now run
     -- past the drain line: they are the outer wall of an outlane, and an
     -- outlane that stops above the drain is a shelf.
-    { 10,  948, 10,  90,  76,  14,  372, 14, 438, 90, 438, 948 },
+    { 10,  948, 10,  90,  76,  14, 372, 14, 438, 90, 438, 948 },
     -- The traditional bottom (docs/boards-v2.md §3). Down each side, in order
     -- from the outer wall: an OUTLANE that drains, a lane divider, an INLANE
     -- that feeds the flipper, and a slingshot above it. Before this the ball
@@ -79,11 +80,13 @@ return {
     --
     -- Each side is one chain: divider first, then the inlane floor, so the
     -- two cannot drift apart and leave a gap the ball falls through. The
-    -- chain descends throughout -- the bowl check would say so otherwise --
+    -- cubic rounds the bottom continuously into the flipper feed
     -- and ends 9.9px outside its pivot, the offset measured for the old
     -- lower-wall chains and kept for the same reason.
-    { 36,  700, 40,  852, 110, 864, 148, 873 },
-    { 412, 700, 408, 852, 338, 864, 300, 873 },
+    { 36, 700, 39, 810,
+      { to = { 148, 873 }, c1 = { 40, 849 }, c2 = { 104, 862 } } },
+    { 412, 700, 409, 810,
+      { to = { 300, 873 }, c1 = { 408, 849 }, c2 = { 344, 862 } } },
     -- The pass ramp. A short channel high on the board, not the 390px
     -- corridor that used to run from y=150 to y=540 through the dead centre.
     --
@@ -135,57 +138,30 @@ return {
     { 210, 380, 236, 358, 262, 380 },
   },
 
-  -- Two slingshots, one above each flipper, hypotenuse facing up-board and
-  -- roughly parallel to the flipper below it. A ball coming down the side
-  -- meets the face and is thrown back across the playfield instead of rolling
-  -- into the drain, which is what fills the 340px of empty approach the ramp
-  -- vacated when the board grew.
-  --
-  -- The tip stops 28px short of the pivot in x. Closer than that and the
-  -- triangle reaches inside the flipper's swept arc, which the geometry gate
-  -- rejects: at pivot-24 it is 56.3px from the pivot against a 52.96px reach.
+  -- Flush rollover switches add shots without blocking the orbit or return lanes.
+  targets    = {
+    { x = 151, y = 340, w = 28, h = 9, bank = "forge" },
+    { x = 313, y = 340, w = 28, h = 9, bank = "forge" },
+  },
+
+  rollovers  = {
+    { x = 38,  y = 330, w = 36, h = 26, label = "L" },
+    { x = 410, y = 330, w = 36, h = 26, label = "R" },
+    { x = 224, y = 690, w = 68, h = 26, label = "C" },
+  },
+
+  -- Tall, narrow slings leave a broad return lane behind their outer edge.
   slingshots = {
-    { p = { 66, 756, 140, 806, 66, 814 } },
-    { p = { 382, 756, 308, 806, 382, 814 } },
+    { p = { 84, 714, 140, 806, 84, 814 } },
+    { p = { 364, 714, 308, 806, 364, 814 } },
   },
 
   -- A's character: a bumper cluster. Chaotic, keeps the ball alive.
-  --
-  -- Re-placed for the 448x960 board. The old positions were tuned against a
-  -- lane that no longer exists: with the ramp channel shortened to y=380 the
-  -- whole top third of the board opened up, and probe_reach's play map puts
-  -- the heaviest traffic across the top and down both orbits rather than in
-  -- the narrow left lane the cluster used to straddle.
-  --
-  -- A "+" nest: north, west, south, east around a centre at (224,190).
-  --
-  -- The stacking rule (CLAUDE.md) says nothing may sit under anything else,
-  -- and a + puts its south arm directly under its north arm. That rule is
-  -- about SCENERY: a static target in a shadow is never reached. Bumpers
-  -- write their own traffic -- the north arm kicks the ball sideways and down
-  -- into the west and east arms, which throw it back across the south arm --
-  -- so a + is live as long as the nest as a whole sits in the stream. Get it
-  -- out of the stream and the shadow reappears and the south arm dies.
-  --
-  -- Centre and arm length were swept together (cx 200/224/248, cy 190/220/250,
-  -- arm 62/78/94; 8 seeds x 40s each) scoring on the WEAKEST arm, because the
-  -- total rate hides a dead bumper -- one candidate scored 0.75/s with an arm
-  -- on exactly zero. cx=224 cy=190 arm=78 was the only cell where all four
-  -- arms were comfortably live, and it was not close:
-  --
-  --     placement                 weakest arm     total
-  --     cx=224 cy=190 arm=78         27           0.66/s
-  --     cx=200 cy=220 arm=62          5           0.23/s
-  --     everything else             0..3       0.02..0.30/s
-  --
-  -- Confirmed on three independent seed bases at 10 seeds x 40s: 0.65 / 0.65 /
-  -- 0.64 per second, arms 66/67/95/32, 65/66/96/31, 66/63/94/33. Stable to the
-  -- third digit, which for this board is as repeatable as a number gets.
+  -- Downward-pointing triangle: two upper bumpers feed a lower centre.
   bumpers    = {
-    { x = 224, y = 112, r = 22, restitution = 1.15 }, -- north
-    { x = 157, y = 210, r = 22, restitution = 1.15 }, -- west
-    -- { x = 224, y = 268, r = 22, restitution = 1.15 }, -- south
-    { x = 292, y = 210, r = 22, restitution = 1.15 }, -- east
+    { x = 224, y = 210, r = 22, restitution = 1.15 }, -- bottom
+    { x = 157, y = 112, r = 22, restitution = 1.15 }, -- upper left
+    { x = 292, y = 112, r = 22, restitution = 1.15 }, -- upper right
   },
 
   -- §6.2 "the wall that guards the outlane", and the answer to the outlanes
@@ -270,18 +246,6 @@ return {
   -- §6.1: both devices are persistent states with a visible travel time.
   -- §6.2: both give and take.
   devices    = {
-    {
-      id           = "gate",
-      kind         = "gate",
-      travel       = 0.30,
-      pivot        = { x = 210, y = 445 },
-      length       = 52,
-      closed       = 0.13,  -- arm seals the ramp: shots come back down it
-      open         = -1.57, -- arm straight up the ramp wall: the mouth is reachable
-      tradeoff     = "Opens the pass, closes the safe return loop.",
-      label_closed = "RETURN",
-      label_open   = "PASS",
-    },
     {
       id           = "post",
       kind         = "paddle",
@@ -403,10 +367,10 @@ return {
   ramps   = {
     {
       id          = "skyway",
-      path        = { 94, 570,
+      path        = { 94, 460,
         94, 190, { round = 110 },
         347, 190, { round = 110 },
-        347, 570 },
+        347, 460 },
       -- 54px of lane against a 17.3px ball, swept rather than chosen. The
       -- entry window is the lane narrowed by a ball radius -- core/ramp.lua
       -- will not close the rails around a ball already overlapping one -- so
@@ -437,7 +401,7 @@ return {
   },
 
   tube    = { mouth = { x = 236, y = 398, r = 14 }, to = "b" },
-  entry   = { x = 90, y = 116, dir = { x = -0.20, y = 1 } },
+  entry   = { x = 90, y = 116, dir = { x = 0.4, y = 1 } },
   -- Served into the open right field, clear of the lane furniture: a real
   -- shooter lane is phase 5, and a serve inside a 26px outlane rattles.
   serve   = { x = 400, y = 660, dir = { x = 0, y = -1 } },
