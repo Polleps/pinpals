@@ -2,6 +2,22 @@ return function(H)
   local GameNight = require("app.gamenight")
   local A = H.assert
   H.describe("party lifecycle with real physics", function()
+    H.it("requests the lobby on Back or Escape without forwarding gameplay input", function()
+      local messages = {}
+      local game = setmetatable({ session = "one", phase = "paused", transport = {
+        send = function(_, message) messages[#messages + 1] = message end,
+      } }, GameNight)
+      game:key("escape", true)
+      game:pad({}, "back", true)
+      game:key("escape", false)
+      game:pad({}, "back", false)
+      A.equal(2, #messages)
+      A.equal("request_overlay", messages[1].type)
+      A.equal("request_overlay", messages[2].type)
+      game.session = nil
+      game:key("escape", true)
+      A.equal(2, #messages)
+    end)
     H.it("warms frozen, plays, pauses, rejects stale commands, and replays ten times", function()
       local transport = { messages = {} }
       function transport:send(message) self.messages[#self.messages + 1] = message end

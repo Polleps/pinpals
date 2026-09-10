@@ -123,11 +123,19 @@ function GameNight:push(intent)
 end
 
 function GameNight:key(key, pressed)
+  if pressed and (key == "escape" or key == "backspace") and self.session then
+    self.transport:send({ type = "request_overlay" })
+    return
+  end
   if self.phase ~= "running" then return end
   self:push(input.from_key(key, pressed, self.match.state.tick))
 end
 
 function GameNight:pad(joystick, button, pressed)
+  if pressed and button == "back" and self.session then
+    self.transport:send({ type = "request_overlay" })
+    return
+  end
   if self.phase ~= "running" then return end
   self:push(input.from_pad(joystick, button, pressed, self.match.state.tick))
 end
