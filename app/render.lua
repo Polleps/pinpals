@@ -10,6 +10,8 @@ local geo     = require("core.geometry")
 local ramps   = require("core.ramp")
 local objective = require("core.objective")
 local inspect = require("app.inspect")
+local circuit_draw = require("app.circuits")
+local circuit = require("core.circuit")
 
 local M = {}
 
@@ -46,6 +48,9 @@ local function layout(defs)
   -- 0.95 rather than 1.0 so a board that happens to be short does not fill
   -- the window edge to edge and leave the nameplate hanging off the top.
   S_ACTIVE  = math.min(0.95, (H - TOP_Y - FOOTER) / tallest)
+  -- Reserve a readable HUD column even with wide shoulders on either board.
+  local aw, bw = defs.a.size.w, defs.b.size.w
+  S_ACTIVE = math.min(S_ACTIVE, (W - 3 * MARGIN - 320) / math.max(aw + bw * 0.43, bw + aw * 0.43))
   S_DORMANT = S_ACTIVE * 0.43
   S_TRANSIT = S_ACTIVE * 0.75    -- both boards visible for the pass (§10)
 end
@@ -644,15 +649,17 @@ local function draw_shot_inserts(ctx)
   end
   local ready = m.charge >= mission.GOAL
   love.graphics.setColor(1, 0.78, 0.28, (ready and 1 or 0.6) * ctx.dim)
-  love.graphics.printf(ready and "SHOOT PASS - JACKPOT" or "BUILD THE RELAY", 84, 608, 280, "center")
+  love.graphics.printf(ready and "SHOOT PASS - JACKPOT" or "BUILD THE RELAY",
+    ctx.def.size.w / 2 - 140, 608, 280, "center")
   for i = 1, mission.GOAL do
     love.graphics.setColor(1, 0.78, 0.28, (i <= m.charge and 0.95 or 0.12) * ctx.dim)
-    love.graphics.circle("fill", 154 + (i - 1) * 20, 638, 6)
+    love.graphics.circle("fill", ctx.def.size.w / 2 - 70 + (i - 1) * 20, 638, 6)
   end
   love.graphics.setColor(0.6, 0.95, 1, 0.8 * ctx.dim)
   for _, r in ipairs(ctx.def.ramps or {}) do
     for _, k in ipairs({ 1, #r.path - 1 }) do
-      love.graphics.printf("SKYWAY", r.path[k] - 36, r.path[k + 1] + 8, 72, "center")
+      local label = r.label and (k == 1 and r.label or "RETURN") or "SKYWAY"
+      love.graphics.printf(label, r.path[k] - 42, r.path[k + 1] + 8, 84, "center")
     end
   end
 end
@@ -675,7 +682,7 @@ local function draw_nameplate(ctx, th)
 end
 
 --- Draw one board: background, geometry, content, devices, ball, label.
-local function draw_board(def, snap, prev, alpha, view, active, heat, incoming, bstate)
+local function draw_board(def, snap, prev, alpha, view, active, heat, incoming, bstate, tick)
   local th  = THEME[def.id]
   local ctx = {
     def = def, snap = snap, prev = prev, alpha = alpha, view = view,
@@ -708,6 +715,7 @@ local function draw_board(def, snap, prev, alpha, view, active, heat, incoming, 
   love.graphics.setScissor(view.x + sx0 * view.s, view.y + sy0 * view.s,
                            (sx1 - sx0) * view.s, (def.size.h - sy0) * view.s)
 
+  circuit_draw.draw(def, bstate, ctx.dim, fonts, tick)
   draw_shot_inserts(ctx)
   draw_drain_line(ctx)
   draw_shadows(ctx, th)
@@ -839,7 +847,7 @@ end
 --- them. Naming each player's actual keys matters because those keys
 --- change meaning every time the ball crosses.
 ---@return number y
-local function hud_roles(x, y, legend, active, transit)
+local function hud_roles(x, y, legend, active, transit, def)
   -- Roles: implicit in ball position, so just report them (§4).
   local roles = { [1] = intents.role_of(1, active), [2] = intents.role_of(2, active) }
   love.graphics.setFont(fonts.body)
@@ -856,6 +864,10 @@ local function hud_roles(x, y, legend, active, transit)
       and ("%s / %s"):format(L.flip_left, L.flip_right)
       or  (transit and "%s post  %s/%s AIM" or "%s post  %s/%s guard"):format(L.operator_paddle,
                                                    L.flip_left, L.flip_right), x + 120, y + 3)
+    if not flip and def.circuits then
+      love.graphics.print(L.operator_gate .. " workshop gate", x + 120, y + 18)
+      y = y + 16
+    end
     love.graphics.setFont(fonts.body)
     y = y + 22
   end
@@ -902,7 +914,8 @@ local function hud_devices(state, def, snaps, x, y, active)
     local cmd = state.boards[active].devices[d.id].commanded
     love.graphics.setFont(fonts.body)
     col(1, 1, 1, 0.9)
-    love.graphics.print(cmd and d.label_open or d.label_closed, x, y)
+    local powered = circuit.powered(state.boards[active], d)
+    love.graphics.print(not powered and "NO POWER" or (cmd and d.label_open or d.label_closed), x, y)
     bar(x + 92, y + 5, 150, 8, p, lerp(0.35, 1.0, p), lerp(0.45, 0.72, p), lerp(0.55, 0.20, p))
     love.graphics.setFont(fonts.small)
     col(1, 1, 1, 0.42)
@@ -1078,15 +1091,52 @@ local function hud_mission(state, x, y)
   end
 end
 
+local function hud_workshop(state, def, legend, x, y)
+  local spec = def.circuits[1]
+  local c = state.boards[state.active].circuits[spec.id]
+  local ready = c.charge >= c.capacity
+  local operator = state.active == "a" and 2 or 1
+  love.graphics.setFont(fonts.small)
+  col(0.4, 0.95, 0.8)
+  love.graphics.print("FOUNDRY / POWER THE WORKSHOP", x, y)
+  love.graphics.setFont(fonts.head)
+  col(1, 0.8, 0.35)
+  love.graphics.print(c.active and "WORKSHOP RUNNING" or (ready and "WORKSHOP READY"
+    or ("POWER  %d / %d"):format(c.charge, c.capacity)), x, y + 25)
+  bar(x, y + 63, 310, 8, c.charge / c.capacity, 0.3, 1, 0.75)
+  love.graphics.setFont(fonts.body)
+  col(1, 1, 1, 0.85)
+  love.graphics.print(c.active and "Follow the loop into the left inlane."
+    or ready and ("P%d: hold %s to open the entrance."):format(operator,
+    legend[operator].operator_gate) or "Shoot through the striped generator.", x, y + 88)
+  love.graphics.setFont(fonts.small)
+  col(1, 1, 1, 0.6)
+  love.graphics.print("1. Generate power. Fast crossings charge twice as much.", x, y + 116)
+  love.graphics.print("2. Operator opens the gate; flipper shoots WORKSHOP.", x, y + 138)
+  love.graphics.print("3. Ride the loop back to the flippers. Pass for a combo.", x, y + 160)
+  col(0.4, 0.95, 0.8)
+  love.graphics.print(("%d completed runs / %d attempts"):format(c.completed, c.attempts), x, y + 186)
+  local m = state.boards[state.active].mission
+  col(1, 0.8, 0.35)
+  love.graphics.print(("Relay charge %d / 8   |   %d jackpots"):format(m.charge, m.jackpots), x, y + 211)
+  if (state.shot_notice_time or 0) > 0 then
+    love.graphics.print(state.shot_notice, x, y + 236)
+  elseif m.combo > 0 then
+    love.graphics.print(("SHOOT PASS: combo %.1fs"):format(m.combo), x, y + 236)
+  end
+end
+
 local function draw_hud(state, defs, snaps, legend)
   local x, y   = M.hud_x, math.floor(H * 0.49)
-  hud_mission(state, x, 52)
+  if defs[state.active].circuits and #defs[state.active].circuits > 0 then
+    hud_workshop(state, defs[state.active], legend, x, 52)
+  else hud_mission(state, x, 52) end
   local active = state.active
   local def    = defs[active]
   local transit = state.phase == "transit"
 
   y = hud_header(state, def, x, y)
-  y = hud_roles(x, y, legend, active, transit)
+  y = hud_roles(x, y, legend, active, transit, def)
   y = hud_objective(state, defs, x, y)
   y = hud_devices(state, def, snaps, x, y, active)
   hud_score(state, x, y)
@@ -1221,7 +1271,7 @@ function M.draw(match, legend, flags)
   for _, id in ipairs({ "a", "b" }) do
     draw_board(match.defs[id], match.cur[id], match.prev[id], match.alpha,
                M.view[id], id == state.active, heat,
-               (t and id == t.to) and { u = incoming_u, aim = t.aim or 0 } or nil, state.boards[id])
+               (t and id == t.to) and { u = incoming_u, aim = t.aim or 0 } or nil, state.boards[id], state.tick)
   end
   if state.phase == "transit" then draw_transit(state, match.defs) end
   HA = M.hud_a

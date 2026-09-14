@@ -53,7 +53,8 @@ return function(H)
   describe("rollover switches", function()
     it("scores a crossing without blocking or bouncing the ball", function()
       local b = Board.new(boards.a)
-      b:spawn(224, 650, 0, 300)
+      local lane = boards.a.rollovers[3]
+      b:spawn(lane.x, lane.y - 40, 0, 300)
       local evs = {}
       run(b, 0.16, cmd(), evs)
       local hits = 0
@@ -72,7 +73,8 @@ return function(H)
       it(id .. " builds with two flippers and two devices", function()
         local b = Board.new(boards[id])
         A.truthy(b.flippers.left and b.flippers.right)
-        A.truthy(not b.devices.gate and b.devices.post)
+        A.truthy(b.devices.post)
+        A.equal(id == "a", b.devices.gate ~= nil)
         A.equal(64, love.physics.getMeter(), "world scale must come from constants (§4.2)")
       end)
     end
@@ -235,7 +237,6 @@ return function(H)
         for _, commanded in ipairs({ false, true }) do
           local def = boards[id]
           local b = Board.new(def, 7919)
-          A.falsy(b.devices.gate)
           b:spawn(def.tube.mouth.x, def.tube.mouth.y + 352, 0, -C.SERVE_SPEED)
           local events = {}
           run(b, 1.5, cmd(commanded, false), events)
@@ -1043,7 +1044,7 @@ return function(H)
       -- the left flipper first and rolling in -- so the fixture silently
       -- depended on flipper length, and stopped settling when the bat grew to
       -- 64px in boards-v3 phase 0. Drop it where the comment above says.
-      m.boards.a:spawn(224, 600, 0, 0)                  -- drop onto the post
+      m.boards.a:spawn(boards.a.devices[1].up.x, 600, 0, 0)                  -- drop onto the post
       impacts_of(m, C.TICK_HZ * 4)                      -- settle
       local resting = impacts_of(m, C.TICK_HZ * 2)
       A.equal(0, #resting, "a resting ball is still reporting impacts")
@@ -1086,9 +1087,9 @@ return function(H)
       local flat = curve.flatten({ 10, 948,
                                    10, 90, { round = 40 },
                                    76, 14, { round = 40 },
-                                   372, 14, { round = 40 },
-                                   438, 90, { round = 40 },
-                                   438, 948 }, "shell")
+                                   574, 14, { round = 40 },
+                                   630, 90, { round = 40 },
+                                   630, 948 }, "shell")
       A.truthy(flat, "the rounded shell did not expand")
       b.walls[1] = flat or {}
       return b
@@ -1096,7 +1097,7 @@ return function(H)
 
     it("expands into more wall than it was authored with", function()
       local b = domed()
-      A.truthy(#b.walls[1] > #boards.a.walls[1],
+      A.truthy(#b.walls[1] > 12,
         "rounding the corners produced no extra vertices")
     end)
 
@@ -1120,8 +1121,13 @@ return function(H)
   end)
 
   describe("elevated ramps (core/ramp.lua)", function()
-    local def = boards.a
-    local geom = def.ramps[1].geom
+    local def = {}
+    for k, v in pairs(boards.a) do def[k] = v end
+    local route = {}
+    for k, v in pairs(boards.a.ramps[1]) do route[k] = v end
+    route.device = nil
+    def.ramps, def.devices = { route }, { boards.a.devices[1] }
+    local geom = route.geom
 
     --- Fire a ball straight into a mouth of the skyway, fast enough to be let
     --- on. Deliberately not a flipper shot: this is testing the layer, and a

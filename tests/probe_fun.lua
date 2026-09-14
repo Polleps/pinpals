@@ -8,7 +8,7 @@ return function()
   for _, id in ipairs({ "a", "b" }) do
     totals[id] = { targets = {}, lanes = {}, rides = 0, jackpots = 0, banks = 0, passes = 0 }
   end
-  local stalls = 0
+  local stalls, energy, attempts, completed = 0, 0, 0, 0
   for seed = 1, 8 do
     local rng = love.math.newRandomGenerator(7300 + seed * 977)
     local m = Match.new(defs, 7300 + seed * 977)
@@ -33,6 +33,7 @@ return function()
         stalls, reported = stalls + 1, true
       end
       for _, ev in ipairs(m:drain_events()) do
+        if ev.kind == "switch" then energy = energy + 1 end
         local t = totals[ev.board]
         if t then
           if ev.kind == "target" then t.targets[ev.index] = (t.targets[ev.index] or 0) + 1 end
@@ -41,6 +42,8 @@ return function()
         end
       end
     end
+    local c = m.state.boards.a.circuits.workshop
+    if c then attempts, completed = attempts + c.attempts, completed + c.completed end
     for id, b in pairs(m.state.boards) do
       local t = totals[id]
       t.rides = t.rides + b.mission.rides
@@ -57,6 +60,7 @@ return function()
     for i in ipairs(defs[id].targets) do print("  target", i, t.targets[i] or 0) end
     for i in ipairs(defs[id].rollovers) do print("  lane", i, t.lanes[i] or 0) end
   end
+  print("generator crossings", energy, "workshop attempts", attempts, "completed", completed)
   print("stalled seeds", stalls)
   return stalls == 0
 end

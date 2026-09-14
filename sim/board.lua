@@ -8,6 +8,7 @@
 local C    = require("core.constants")
 local geo  = require("core.geometry")
 local ramp = require("core.ramp")
+local circuit = require("core.circuit")
 
 local Board = {}
 Board.__index = Board
@@ -92,6 +93,15 @@ local function build_rollovers(self, def)
     local f = love.physics.newFixture(self.ground, shape, 0)
     f:setSensor(true)
     ud(f, "rollover", i)
+  end
+end
+
+local function build_switches(self, def)
+  for i, spec in ipairs(def.switches or {}) do
+    local shape = love.physics.newRectangleShape(spec.x, spec.y, spec.w, spec.h)
+    local f = love.physics.newFixture(self.ground, shape, 0)
+    f:setSensor(true)
+    ud(f, "switch", i)
   end
 end
 
@@ -267,6 +277,7 @@ function Board.new(def, seed)
   build_slingshots(self, def)
   build_targets(self, def)
   build_rollovers(self, def)
+  build_switches(self, def)
   build_mouth(self, def)
   build_devices(self, def)
   build_guards(self, def)
@@ -390,11 +401,13 @@ end
 
 function Board:_dismount(complete)
   local id = self.on_ramp and self.on_ramp.id
+  local label = self.on_ramp and self.on_ramp.label
   self.on_ramp, self.ball_s = nil, 0
   self:_see("field")
   local x, y = self:ball_pos()
   self.events[#self.events+1] =
-    { kind = "ramp", board = self.id, id = id, at = "exit", complete = complete or false, x = x, y = y }
+    { kind = "ramp", board = self.id, id = id, label = label, at = "exit",
+      complete = complete or false, x = x, y = y }
 end
 
 --- Is the ball about to commit to a ramp? Only from inside the lane, only
@@ -410,7 +423,9 @@ function Board:_boarding(x, y, vx, vy)
   for _, r in ipairs(self.ramps) do
     local g = r.geom
     local s, lat, tx, ty = ramp.project(g, x, y)
-    if math.abs(lat) <= g.width / 2 - C.BALL_RADIUS then
+    local device = r.device and self.devices[r.device]
+    local enabled = not r.device or (device and device.enabled and self:device_progress(r.device) > 0.95)
+    if enabled and math.abs(lat) <= g.width / 2 - C.BALL_RADIUS then
       local along = vx * tx + vy * ty
       -- The window is INSIDE the ramp, never before it. A ball that mounts
       -- while its projection is still short of the mouth is, by the very
@@ -501,6 +516,11 @@ function Board:_begin(fa, fb, _)
   if a.kind == "ball" then other = b elseif b.kind == "ball" then other = a else return end
   if other.kind == "mouth" then
     self.events[#self.events+1] = { kind = "tube", board = self.id, speed = self:ball_speed() }
+
+  elseif other.kind == "switch" then
+    local spec = self.def.switches[other.id]
+    self.events[#self.events+1] = { kind = "switch", board = self.id,
+      index = other.id, speed = self:ball_speed(), x = spec.x, y = spec.y }
 
   elseif other.kind == "rollover" then
     local lane = self.def.rollovers[other.id]
@@ -644,7 +664,8 @@ function Board:step(bstate, has_ball)
     drive_flipper(f, has_ball and bstate.flippers[side] or false)
   end
   for id, dev in pairs(self.devices) do
-    drive_device(dev, bstate.devices[id].commanded, dt)
+    dev.enabled = circuit.powered(bstate, dev.def)
+    drive_device(dev, bstate.devices[id].commanded and dev.enabled, dt)
   end
   -- Both guards travel on every switch: one leaves as the other arrives, so
   -- for GUARD_TRAVEL seconds neither lane is sealed. That gap is the trade

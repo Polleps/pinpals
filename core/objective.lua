@@ -56,8 +56,15 @@ function M.current(s, names)
 
   local m = board.mission
   if m and (m.combo > 0 or m.charge >= mission.GOAL) then
-    return { text = m.combo > 0 and "SHOOT PASS - SKYWAY COMBO" or "SHOOT PASS - RELAY JACKPOT",
+    return { text = m.combo > 0 and ("SHOOT PASS - " .. (m.combo_label or "SKYWAY") .. " COMBO")
+      or "SHOOT PASS - RELAY JACKPOT",
       board = active, urgent = true, here = true }
+  end
+
+  for _, c in pairs(board.circuits or {}) do
+    if c.charge >= c.capacity then
+      return { text = c.label .. " READY - OPEN GATE", board = active, urgent = true, here = true }
+    end
   end
 
   -- 1. A lit board is a timer running down on free money. It outranks

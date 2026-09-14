@@ -94,6 +94,13 @@ return function()
 
     -- Cross-board meters stay in range, and lit counters never go negative.
     for id, b in pairs(s.boards) do
+      for name, c in pairs(b.circuits or {}) do
+        if c.charge < 0 or c.charge > c.capacity then fail(i, id .. " circuit " .. name .. " out of range") end
+        if c.completed > c.attempts then fail(i, id .. " circuit completed without entry") end
+        if c.active and (not m.boards[id].on_ramp or m.boards[id].on_ramp.id ~= c.route) then
+          fail(i, id .. " circuit remained active after leaving its route")
+        end
+      end
       for name, v in pairs(b.meters) do
         if v < 0 or v > C.CHARGE_MAX then
           fail(i, ("%s meter %s out of range: %d"):format(id, name, v))
@@ -176,6 +183,11 @@ return function()
   print(("  ramp rides %d   longest %.1fs   longest stall %.2fs%s")
     :format(rides, worst_ride / C.TICK_HZ, worst_still / C.TICK_HZ,
             stalled and ("  <- " .. stalled) or ""))
+  for id, b in pairs(m.state.boards) do
+    for name, c in pairs(b.circuits) do
+      print(("  %s %s: %d entries, %d completed"):format(id, name, c.attempts, c.completed))
+    end
+  end
   if #fails == 0 then
     print("  invariants: all held")
   else

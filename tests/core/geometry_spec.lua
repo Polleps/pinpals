@@ -87,7 +87,8 @@ return function(H)
 
     it("a wall ending underneath its own flipper pivot", function()
       local b = broken(function(x)
-        x.walls[2] = { 10,802, 102,856, 156,882, 165,884 }
+        local fx = x.flippers[1].x
+        x.walls[2] = { fx-145,802, fx-53,856, fx+1,882, fx+10,884 }
       end)
       A.truthy(kinds(b)["flipper-jam"], "the wall inside the left flipper was not reported")
     end)
@@ -108,7 +109,9 @@ return function(H)
 
     it("a gate too short to seal the ramp", function()
       local b = broken(function(x)
-        table.insert(x.devices, { id = "gate", kind = "gate", pivot = { x = 210, y = 445 },
+        x.walls[#x.walls+1] = { 210,400, 210,480 }
+        x.walls[#x.walls+1] = { 262,400, 262,480 }
+        table.insert(x.devices, { id = "fixture_gate", kind = "gate", pivot = { x = 210, y = 445 },
           length = 30, closed = 0.13, open = -1.57 })
       end)
       A.truthy(kinds(b)["gate-leaks"], "a gate that does not reach the wall was not reported")
@@ -116,7 +119,9 @@ return function(H)
 
     it("a gate that barely opens", function()
       local b = broken(function(x)
-        table.insert(x.devices, { id = "gate", kind = "gate", pivot = { x = 210, y = 445 },
+        x.walls[#x.walls+1] = { 210,400, 210,480 }
+        x.walls[#x.walls+1] = { 262,400, 262,480 }
+        table.insert(x.devices, { id = "fixture_gate", kind = "gate", pivot = { x = 210, y = 445 },
           length = 52, closed = 0.13, open = -0.6 })
       end)
       A.truthy(kinds(b)["gate-blocks"], "a gate leaving 4.6px of clearance was not reported")

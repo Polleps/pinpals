@@ -86,6 +86,17 @@ local function collect_content(def, out)
           ("targets[%d]  %sx%s  %s"):format(i, num(t.w), num(t.h), t.bank or ""),
           "centre")
   end
+  for i, spec in ipairs(def.switches or {}) do
+    point(out, spec.x, spec.y, ("switches[%d] %s"):format(i, spec.id), "centre")
+  end
+  for i, spec in ipairs(def.sections or {}) do
+    point(out, spec.x, spec.y, ("sections[%d] %s"):format(i, spec.id))
+  end
+  for i, spec in ipairs(def.circuits or {}) do
+    for j = 1, #spec.wire, 2 do
+      point(out, spec.wire[j], spec.wire[j+1], ("circuits[%d].wire[%d]"):format(i, j))
+    end
+  end
   for i, f in ipairs(def.flippers or {}) do
     point(out, f.x, f.y, ("flippers[%d]  %s pivot"):format(i, f.side), "centre")
   end
@@ -166,6 +177,7 @@ end
 local function rects_of(def)
   local out = {}
   for _, t in ipairs(def.targets or {}) do out[#out+1] = t end
+  for _, spec in ipairs(def.switches or {}) do out[#out+1] = spec end
   for _, d in ipairs(def.devices or {}) do
     if d.kind ~= "gate" then
       out[#out+1] = { x = d.up.x,   y = d.up.y,   w = d.w, h = d.h, angle = 0 }

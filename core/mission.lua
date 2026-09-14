@@ -49,8 +49,9 @@ function M.shot(s, ev)
   elseif ev.kind == "ramp" and ev.at == "exit" and ev.complete then
     m.rides = m.rides + 1
     m.combo = M.COMBO_TIME
+    m.combo_label = ev.label or "SKYWAY"
     M.charge(m, 3)
-    announce(m, "SKYWAY! PASS FOR COMBO")
+    announce(m, (ev.label or "SKYWAY") .. "! PASS FOR COMBO")
     return score.award(s.stats, "ramp")
   elseif ev.kind == "tube" then
     local value = 0
@@ -62,7 +63,7 @@ function M.shot(s, ev)
     end
     if m.combo > 0 then
       value = value + score.award(s.stats, "combo")
-      announce(m, "SKYWAY PASS COMBO!")
+      announce(m, (m.combo_label or "SKYWAY") .. " PASS COMBO!")
     end
     if value > 0 then
       s.shot_notice, s.shot_notice_time = m.notice, 3

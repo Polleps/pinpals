@@ -120,6 +120,8 @@ function M.board(b)
     end
   end
 
+  require("core.circuit_validate").check(b, e)
+
   -- Exactly one left and one right flipper.
   local sides = {}
   if type(b.flippers) ~= "table" or #b.flippers ~= 2 then

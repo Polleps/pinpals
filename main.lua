@@ -19,11 +19,13 @@ local C = require("core.constants")
 
 local mode, shot_ticks, shot_open, shot_pass = "play", 240, false, false
 local hot_on, shot_coords = true, nil
+local shot_workshop = false
 
 for i, v in ipairs(arg or {}) do
   if v == "--test" then mode = "test" end
   if v == "--shot" then mode = "shot"; shot_ticks = tonumber(arg[i + 1]) or 240 end
   if v == "--open" then shot_open = true end
+  if v == "--workshop" then shot_workshop = true end
   if v == "--pass" then shot_open = true; shot_pass = true end
   if v == "--no-hot" then hot_on = false end
   -- `--shot 1 --coords b` prints a board's coordinates to a PNG: the same
@@ -101,7 +103,23 @@ function love.load()
     end
     -- --pass puts the ball up the ramp on cue, so the transit and the
     -- handed-over camera can both be captured deterministically.
-    if shot_pass then
+    if shot_workshop then
+      -- Demonstrate the real circuit through two generator crossings, then
+      -- launch into its powered entrance. Only available in screenshot mode.
+      run_with_fx(200)
+      local b, gen = match.boards.a, boards.a.switches[1]
+      for _ = 1, 2 do
+        b:spawn(gen.x, gen.y + 30, 0, -1200)
+        run_with_fx(25)
+        b:despawn()
+        run_with_fx(160)
+      end
+      match:push({ player = 2, action = "operator_gate", pressed = true })
+      run_with_fx(100)
+      local r = boards.a.ramps[1]
+      b:spawn(r.path[1], r.path[2] + 38, 0, -1600)
+      run_with_fx(shot_ticks)
+    elseif shot_pass then
       run_with_fx(200)
       match.boards[match.state.active]:spawn(
         boards[match.state.active].tube.mouth.x, 520, 0, -C.SERVE_SPEED)

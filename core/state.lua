@@ -10,6 +10,7 @@ local intents = require("core.intents")
 local score   = require("core.score")
 
 local mission = require("core.mission")
+local circuit = require("core.circuit")
 
 local M = {}
 
@@ -45,6 +46,7 @@ function M.new(boards)
   }
   for id, def in pairs(boards) do
     local b = {
+      circuits = circuit.new(def), switches = def.switches or {}, switch_ticks = {},
       mission = mission.new(), lane_count = #(def.rollovers or {}),
       id = id, flippers = { left = false, right = false },
       devices = {}, targets = {}, banks = {},
@@ -420,13 +422,22 @@ function M.consume(s, events)
       fire_links(s, ev.board, "bumper")
       mission.charge(board.mission, 1)
 
+    elseif ev.kind == "switch" and s.phase == "play" then
+      local b = s.boards[ev.board]
+      if circuit.switch(b, ev, s.tick) then
+        s.last_award = { kind = "lane", value = score.award(s.stats, "lane"),
+          board = ev.board, x = ev.x, y = ev.y }
+      end
+
     elseif (ev.kind == "rollover" or ev.kind == "ramp") and s.phase == "play" then
+      if ev.kind == "ramp" then circuit.route(s.boards[ev.board], ev) end
       local value = mission.shot(s, ev)
       if value > 0 then
         s.last_award = { kind = ev.kind, value = value, board = ev.board, x = ev.x, y = ev.y }
       end
 
     elseif ev.kind == "drain" and s.phase == "play" then
+      circuit.drain(s.boards[ev.board])
       s.boards[ev.board].mission.combo = 0
       -- Not dead yet (§8). The rally, the score it has earned and the drain
       -- count all stay untouched until purgatory actually expires, so a
