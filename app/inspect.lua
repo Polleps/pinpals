@@ -111,6 +111,8 @@ local function collect_devices(def, out)
     if d.kind == "gate" then
       point(out, d.pivot.x, d.pivot.y,
             ("%s.pivot  len%s"):format(d.id, num(d.length)), "centre")
+    elseif d.kind == "magnet" then
+      point(out, d.x, d.y, ("%s  r%s"):format(d.id, num(d.r)), "centre")
     else
       point(out, d.up.x, d.up.y,
             ("%s.up  %sx%s"):format(d.id, num(d.w), num(d.h)), "centre")
@@ -179,7 +181,7 @@ local function rects_of(def)
   for _, t in ipairs(def.targets or {}) do out[#out+1] = t end
   for _, spec in ipairs(def.switches or {}) do out[#out+1] = spec end
   for _, d in ipairs(def.devices or {}) do
-    if d.kind ~= "gate" then
+    if d.kind == "paddle" then
       out[#out+1] = { x = d.up.x,   y = d.up.y,   w = d.w, h = d.h, angle = 0 }
       out[#out+1] = { x = d.down.x, y = d.down.y, w = d.w, h = d.h, angle = 0 }
     end

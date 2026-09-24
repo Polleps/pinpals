@@ -385,6 +385,12 @@ return {
       label_closed = "OPEN",
       label_open   = "GUARD",
     },
+    {
+      id = "magnet", kind = "magnet", action = "operator_gate", hint = "magnet",
+      x = 296, y = 640, r = 44, travel = 0.25, max_on = 3.0, cooldown = 4.0,
+      tradeoff = "Catches the ball over the right flipper; kills the skyway combo.",
+      label_closed = "MAGNET", label_open = "HOLDING",
+    },
   },
 
 

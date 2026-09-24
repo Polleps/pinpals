@@ -34,6 +34,17 @@ function M.new(player, action, pressed, tick)
   return { player = player, action = action, pressed = pressed and true or false, tick = tick }
 end
 
+--- Which operator action drives a device. A device may name its own
+--- `action`; otherwise the two historical ids keep their historical keys, so
+--- Foundry's gate and both posts need no annotation.
+local DEFAULT_ACTION = { gate = "operator_gate", post = "operator_paddle" }
+
+---@param d table device definition
+---@return string|nil action
+function M.device_action(d)
+  return d.action or DEFAULT_ACTION[d.id]
+end
+
 --- Which board a player calls home. Board ownership decides roles: the owner of
 --- the board holding the ball is the FLIPPER, the other player is the OPERATOR
 --- acting on that same board (design.md §4).

@@ -54,7 +54,9 @@ function Match:_snapshot(id)
   if x then snap.ball = { x = x, y = y, z = b:ball_z() } end
   for side, f in pairs(b.flippers) do snap.flippers[side] = f.body:getAngle() end
   for did, dev in pairs(b.devices) do
-    if dev.kind == "gate" then
+    if dev.kind == "magnet" then
+      snap.devices[did] = { p = b:device_progress(did), holding = dev.holding }
+    elseif dev.kind == "gate" then
       snap.devices[did] = { angle = dev.body:getAngle(), p = b:device_progress(did) }
     else
       local dx, dy = dev.body:getPosition()

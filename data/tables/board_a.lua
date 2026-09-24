@@ -75,6 +75,7 @@ return {
     { id = "gate", kind = "gate", circuit = "workshop", travel = 0.3,
       pivot = { x = 210, y = 582 }, length = 64, closed = -0.45, open = -1.57,
       tradeoff = "One charge buys one workshop attempt.",
+      hint = "workshop gate",
       label_closed = "WORKSHOP", label_open = "ENTER" },
   },
   ramps = {

@@ -329,4 +329,15 @@ C.GUARD_TRAVEL   = 0.30
 -- tests/probe_guard.lua for what it is worth at this number.
 C.GUARD_COOLDOWN = 30
 
+-- §6.2 The magnet (Glasshouse). A saturating spring toward its centre plus
+-- velocity damping, both scaled by field level. The spring saturates at
+-- MAGNET_PULL so the rim bends a fast ball rather than snapping it; the
+-- damping is what stops it orbiting. Hold offset against gravity is
+-- GRAVITY_PX / MAGNET_SPRING, about 1px. tests/sim/magnet_spec.lua measures
+-- what these catch.
+C.MAGNET_PULL    = 3000          -- px/s^2 ceiling on the pull
+C.MAGNET_SPRING  = 400           -- px/s^2 per px of offset, below the ceiling
+C.MAGNET_DAMPING = 8             -- 1/s, on the ball's whole velocity
+C.MAGNET_HOLD_R  = 6           -- within this of centre at full field is "caught"
+
 return C

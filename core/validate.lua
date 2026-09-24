@@ -5,6 +5,7 @@
 --- Pure Lua. No love.* here.
 
 local C = require("core.constants")
+local intents = require("core.intents")
 
 local M = {}
 
@@ -143,7 +144,7 @@ function M.board(b)
 
   -- §6.1: every device must be a persistent state with a real travel time.
   -- A device that snaps is a design bug, so it is a validation error.
-  local seen, kinds = {}, {}
+  local seen, kinds, actions = {}, {}, {}
   if type(b.devices) ~= "table" or #b.devices < 1 then
     e[#e+1] = "devices: expects at least one device"
   end
@@ -175,8 +176,27 @@ function M.board(b)
       vec(e, at .. ".down", d.down)
       vec(e, at .. ".up", d.up)
       if not (isnum(d.w) and isnum(d.h)) then e[#e+1] = at .. ": expected w, h" end
+    elseif d.kind == "magnet" then
+      if not (isnum(d.x) and isnum(d.y) and isnum(d.r) and d.r > C.BALL_RADIUS * 2) then
+        e[#e+1] = at .. ": a magnet needs x, y and a radius wider than the ball"
+      end
+      -- A magnet with no duty limit can hold the ball forever, and a ball
+      -- nobody can move is the one state pillar 1 forbids outright.
+      if not (isnum(d.max_on) and d.max_on > 0 and isnum(d.cooldown) and d.cooldown >= 0) then
+        e[#e+1] = at .. ": a magnet needs max_on > 0 and cooldown >= 0 (seconds)"
+      end
     else
-      e[#e+1] = at .. ".kind: expected 'gate' or 'paddle'"
+      e[#e+1] = at .. ".kind: expected 'gate', 'paddle' or 'magnet'"
+    end
+    -- Which key drives it. Two devices on one key would move together, and
+    -- a device on no key is scenery.
+    local action = intents.device_action(d) or ""
+    if action ~= "operator_gate" and action ~= "operator_paddle" then
+      e[#e+1] = at .. ".action: expected 'operator_gate' or 'operator_paddle'"
+    elseif actions[action] then
+      e[#e+1] = at .. ": " .. action .. " already drives " .. actions[action]
+    else
+      actions[action] = tostring(d.id)
     end
   end
   if b.devices and not kinds.paddle then

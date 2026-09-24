@@ -157,6 +157,11 @@ local function build_devices(self, def)
         def = d, kind = "gate", body = body,
         rate = math.abs(d.open - d.closed) / d.travel,
       }
+    elseif d.kind == "magnet" then
+      -- No body: a magnet is under the playfield glass, and the ball rolls
+      -- straight over it. `level` is its field strength, 0..1, ramping over
+      -- `travel` so engaging it is a state with a visible rise (§6.1).
+      self.devices[d.id] = { def = d, kind = "magnet", level = 0, holding = false }
     elseif d.kind == "paddle" then
       local body = love.physics.newBody(self.world, d.down.x, d.down.y, "kinematic")
       local shape = love.physics.newRectangleShape(0, 0, d.w, d.h)
@@ -506,6 +511,51 @@ function Board:ball_z()
 end
 
 ---------------------------------------------------------------------------
+-- Magnets
+---------------------------------------------------------------------------
+
+--- Pull a playfield ball inside a live magnet's radius toward its centre.
+---
+--- A saturating spring plus damping, both scaled by the field level: the
+--- spring is what holds the ball against gravity once it is caught, the
+--- damping is what makes a fast ball stop rather than orbit. Saturating
+--- keeps the pull finite at the rim, so a ball crossing the edge at speed is
+--- bent rather than snapped. The constants live with the rest of the physics
+--- in core/constants.lua.
+---
+--- A ball on a ramp is above the glass and out of reach.
+function Board:_step_magnets()
+  local ball = self.ball
+  for _, dev in pairs(self.devices) do
+    if dev.kind == "magnet" then
+      local d = dev.def
+      local held = false
+      if dev.level > 0 and ball and not ball:isDestroyed() and not self.on_ramp then
+        local x, y = ball:getPosition()
+        local dx, dy = d.x - x, d.y - y
+        local dist = math.sqrt(dx * dx + dy * dy)
+        if dist < d.r then
+          local vx, vy = ball:getLinearVelocity()
+          local pull = math.min(C.MAGNET_SPRING * dist, C.MAGNET_PULL) * dev.level
+          local ux, uy = 0, 0
+          if dist > 1e-6 then ux, uy = dx / dist, dy / dist end
+          local m = ball:getMass()
+          local damp = C.MAGNET_DAMPING * dev.level
+          ball:applyForce((ux * pull - vx * damp) * m, (uy * pull - vy * damp) * m)
+          held = dev.level > 0.9 and dist < C.MAGNET_HOLD_R
+        end
+      end
+      -- Reported once per catch: core/ charges §6.2's price for it.
+      if held and not dev.holding then
+        self.events[#self.events+1] = { kind = "magnet", board = self.id, id = d.id,
+                                        x = d.x, y = d.y }
+      end
+      dev.holding = held
+    end
+  end
+end
+
+---------------------------------------------------------------------------
 -- Collision
 ---------------------------------------------------------------------------
 
@@ -630,7 +680,10 @@ local function move_body_to(body, tx, ty, rate, dt)
 end
 
 local function drive_device(dev, commanded, dt)
-  if dev.kind == "gate" then
+  if dev.kind == "magnet" then
+    local step = dt / dev.def.travel
+    dev.level = commanded and math.min(1, dev.level + step) or math.max(0, dev.level - step)
+  elseif dev.kind == "gate" then
     local d      = dev.def
     local target = commanded and d.open or d.closed
     local cur    = dev.body:getAngle()
@@ -664,9 +717,11 @@ function Board:step(bstate, has_ball)
     drive_flipper(f, has_ball and bstate.flippers[side] or false)
   end
   for id, dev in pairs(self.devices) do
-    dev.enabled = circuit.powered(bstate, dev.def)
-    drive_device(dev, bstate.devices[id].commanded and dev.enabled, dt)
+    local dstate = bstate.devices[id]
+    dev.enabled = circuit.powered(bstate, dev.def) and (dstate and (dstate.cooldown or 0) <= 0)
+    drive_device(dev, dstate and dstate.commanded and dev.enabled, dt)
   end
+  self:_step_magnets()
   -- Both guards travel on every switch: one leaves as the other arrives, so
   -- for GUARD_TRAVEL seconds neither lane is sealed. That gap is the trade
   -- (§6.2) and it is why the bars move rather than teleporting.
@@ -726,6 +781,7 @@ function Board:device_progress(id)
   local dev = self.devices[id]
   if not dev then return 0 end
   local d = dev.def
+  if dev.kind == "magnet" then return dev.level end
   if dev.kind == "gate" then
     return (dev.body:getAngle() - d.closed) / (d.open - d.closed)
   end

@@ -506,6 +506,31 @@ local function draw_link(ctx)
   love.graphics.line(e.x, e.y, e.x + e.dir.x * 26, e.y + e.dir.y * 26)
 end
 
+--- A magnet is under the glass, so it is drawn as a floor insert: a coil of
+--- rings that fills amber with field strength, and a hard ring while it has
+--- the ball. Dim, not hidden, when off -- the flipper has to know where the
+--- catch would be before asking for it.
+local function draw_magnet(ctx, d, p, holding)
+  local dim = ctx.dim
+  love.graphics.setLineWidth(2)
+  for k = 1, 3 do
+    local r = d.r * k / 3
+    love.graphics.setColor(lerp(0.35, 1.0, p) * dim, lerp(0.55, 0.72, p) * dim,
+                           lerp(0.70, 0.20, p) * dim, 0.22 + 0.5 * p)
+    love.graphics.circle("line", d.x, d.y, r)
+  end
+  if p > 0 then
+    love.graphics.setColor(1.0 * dim, 0.72 * dim, 0.20 * dim, 0.18 * p)
+    love.graphics.circle("fill", d.x, d.y, d.r)
+  end
+  if holding then
+    love.graphics.setLineWidth(3)
+    love.graphics.setColor(1.0 * dim, 0.85 * dim, 0.35 * dim, 0.9)
+    love.graphics.circle("line", d.x, d.y, C.BALL_RADIUS + 5)
+  end
+  love.graphics.setLineWidth(7)
+end
+
 --- §6.1: operator devices, amber as they travel and while engaged.
 local function draw_devices(ctx)
   for _, d in ipairs(ctx.def.devices) do
@@ -516,7 +541,9 @@ local function draw_devices(ctx)
                            lerp(0.45, 0.72, p) * ctx.dim,
                            lerp(0.55, 0.20, p) * ctx.dim, 1)
     love.graphics.setLineWidth(7)
-    if d.kind == "gate" then
+    if d.kind == "magnet" then
+      draw_magnet(ctx, d, p, ds.holding)
+    elseif d.kind == "gate" then
       local ang = ilerp(dp and dp.angle, ds.angle, ctx.alpha) or ds.angle
       love.graphics.line(d.pivot.x, d.pivot.y,
                          d.pivot.x + math.cos(ang) * d.length,
@@ -864,9 +891,13 @@ local function hud_roles(x, y, legend, active, transit, def)
       and ("%s / %s"):format(L.flip_left, L.flip_right)
       or  (transit and "%s post  %s/%s AIM" or "%s post  %s/%s guard"):format(L.operator_paddle,
                                                    L.flip_left, L.flip_right), x + 120, y + 3)
-    if not flip and def.circuits then
-      love.graphics.print(L.operator_gate .. " workshop gate", x + 120, y + 18)
-      y = y + 16
+    if not flip then
+      for _, d in ipairs(def.devices) do
+        if intents.device_action(d) == "operator_gate" then
+          love.graphics.print(L.operator_gate .. " " .. (d.hint or d.id), x + 120, y + 18)
+          y = y + 16
+        end
+      end
     end
     love.graphics.setFont(fonts.body)
     y = y + 22
@@ -915,7 +946,11 @@ local function hud_devices(state, def, snaps, x, y, active)
     love.graphics.setFont(fonts.body)
     col(1, 1, 1, 0.9)
     local powered = circuit.powered(state.boards[active], d)
-    love.graphics.print(not powered and "NO POWER" or (cmd and d.label_open or d.label_closed), x, y)
+    local dstate = state.boards[active].devices[d.id]
+    local label = not powered and "NO POWER"
+      or ((dstate.cooldown or 0) > 0 and ("OVERHEAT %.0fs"):format(math.ceil(dstate.cooldown)))
+      or (cmd and d.label_open or d.label_closed)
+    love.graphics.print(label, x, y)
     bar(x + 92, y + 5, 150, 8, p, lerp(0.35, 1.0, p), lerp(0.45, 0.72, p), lerp(0.55, 0.20, p))
     love.graphics.setFont(fonts.small)
     col(1, 1, 1, 0.42)

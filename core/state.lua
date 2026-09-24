@@ -16,8 +16,6 @@ local M = {}
 
 local OTHER = { a = "b", b = "a" }
 
---- Which device each operator action drives.
-local DEVICE_OF = { operator_gate = "gate", operator_paddle = "post" }
 
 ---@param boards table<string, table>
 ---@return table state
@@ -65,10 +63,19 @@ function M.new(boards)
       -- "eight seconds" is a thing you can plan around, "not yet" is not.
       guard_cooldown = 0,
     }
+    -- Operator action -> device id on this board, resolved once.
+    b.device_for = {}
     for _, d in ipairs(def.devices) do
       -- `commanded` is a rule-level fact: what the operator has asked for.
       -- Where the device physically *is* belongs to sim/, not here.
-      b.devices[d.id] = { commanded = false }
+      --
+      -- `heat` and `cooldown` exist only for a device with a duty limit
+      -- (`max_on`): a magnet held on too long overheats and drops the ball.
+      -- Rules, not physics, so they live here next to the guard's cooldown.
+      b.devices[d.id] = { commanded = false, heat = 0, cooldown = 0,
+                          max_on = d.max_on, rest = d.cooldown }
+      local action = intents.device_action(d)
+      if action then b.device_for[action] = d.id end
     end
     -- Which targets make up which bank, resolved once here rather than
     -- rediscovered from the definitions on every hit. Plain data, so the
@@ -159,7 +166,7 @@ function M.apply_intent(s, it)
   local tboard = target and s.boards[target]
   if not tboard then return end
 
-  local id = DEVICE_OF[it.action]
+  local id = tboard.device_for[it.action]
   local d  = id and tboard.devices[id]
   if d then d.commanded = it.pressed end
 end
@@ -176,6 +183,33 @@ local function release_flippers(s)
   for _, b in pairs(s.boards) do
     b.flippers.left, b.flippers.right = false, false
   end
+end
+
+--- Duty limits. A device with `max_on` heats while it is commanded and cools
+--- at the same rate while it is not; reaching `max_on` forces it off for its
+--- `rest` seconds. Cooling while released is what stops a tap-tap-tap from
+--- dodging the limit, and forcing a whole rest period is what makes holding
+--- it a decision rather than a reflex (design.md §6.2).
+local function update_duty(b, dt)
+  for _, d in pairs(b.devices) do
+    if d.max_on then
+      if d.cooldown > 0 then
+        d.cooldown = math.max(0, d.cooldown - dt)
+      elseif d.commanded then
+        d.heat = d.heat + dt
+        if d.heat >= d.max_on then d.heat, d.cooldown = 0, d.rest or 0 end
+      else
+        d.heat = math.max(0, d.heat - dt)
+      end
+    end
+  end
+end
+
+--- Is this device allowed to act right now? A cooling device is not.
+---@param dstate table per-device core state
+---@return boolean
+function M.device_live(dstate)
+  return dstate.commanded and (dstate.cooldown or 0) <= 0
 end
 
 --- Advance non-physics match flow by one fixed step.
@@ -199,6 +233,7 @@ function M.update(s)
   -- later, which turns a per-ball cost into a permanent one.
   for id, b in pairs(s.boards) do
     mission.update(b.mission, dt, s.phase == "play" and s.active == id)
+    update_duty(b, dt)
     if (b.guard_cooldown or 0) > 0 then
       b.guard_cooldown = math.max(0, b.guard_cooldown - dt)
     end
@@ -421,6 +456,14 @@ function M.consume(s, events)
       }
       fire_links(s, ev.board, "bumper")
       mission.charge(board.mission, 1)
+
+    elseif ev.kind == "magnet" and s.phase == "play" then
+      -- §6.2's magnet trade, as written there: the save kills the combo.
+      local m = s.boards[ev.board].mission
+      if m.combo > 0 then
+        m.combo = 0
+        m.notice, m.notice_time = "MAGNET CATCH - COMBO LOST", 2
+      end
 
     elseif ev.kind == "switch" and s.phase == "play" then
       local b = s.boards[ev.board]
