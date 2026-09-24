@@ -22,18 +22,18 @@ return function(H)
       A.equal(1, c.charge)
       s.tick = 240
       hit(s, 1000)
-      A.equal(3, c.charge)
+      A.equal(c.capacity, c.charge)
       A.truthy(circuit.powered(b, defs.a.devices[2]))
       s.tick = 480
       hit(s, 1600)
-      A.equal(3, c.charge, "energy must stay capped")
+      A.equal(c.capacity, c.charge, "energy must stay capped")
     end)
     H.it("requires both an operator command and stored power; spending is one-shot", function()
       local s, b, c = setup()
       state.apply_intent(s, { player = 2, action = "operator_gate", pressed = true, tick = s.tick })
       A.truthy(b.devices.gate.commanded)
       A.falsy(circuit.powered(b, defs.a.devices[2]))
-      c.charge = 3
+      c.charge = c.capacity
       circuit.route(b, { id = "workshop", at = "enter" })
       circuit.route(b, { id = "workshop", at = "enter" })
       A.equal(0, c.charge)
@@ -47,10 +47,10 @@ return function(H)
     end)
     H.it("keeps preparation across drains; rollbacks do not count as completed rides", function()
       local s, b, c = setup()
-      c.charge = 2
+      c.charge = 1
       state.consume(s, { { kind = "drain", board = "a" } })
-      A.equal(2, c.charge)
-      c.charge = 3
+      A.equal(1, c.charge)
+      c.charge = c.capacity
       circuit.route(b, { id = "workshop", at = "enter" })
       circuit.route(b, { id = "workshop", at = "exit", complete = false })
       A.equal(0, c.completed)

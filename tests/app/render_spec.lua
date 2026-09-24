@@ -36,4 +36,20 @@ return function(H)
   end)
 
   render.inspect = nil
+
+  H.describe("dormant board status", function()
+    local state = require("core.state")
+    local boards = require("data.tables.init").load()
+    H.it("lists what is waiting on the other board, and nothing when empty", function()
+      local s = state.new(boards)
+      A.equal(0, #render.dormant_lines(s.boards.b, boards.b))
+      s.boards.b.meters.vault = 3
+      s.boards.b.targets[1].lit = true
+      s.boards.a.circuits.workshop.charge = 1
+      local b = table.concat(render.dormant_lines(s.boards.b, boards.b), "|")
+      A.truthy(b:find("VAULT 1/3  x4", 1, true), b)
+      local a = table.concat(render.dormant_lines(s.boards.a, boards.a), "|")
+      A.truthy(a:find("WORKSHOP POWER 1/2", 1, true), a)
+    end)
+  end)
 end

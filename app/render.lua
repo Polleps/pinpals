@@ -1341,6 +1341,59 @@ end
 
 ---------------------------------------------------------------------------
 
+--- What is waiting on the board nobody is looking at, as a few short lines
+--- under its panel. The panel itself is drawn at 43% and flashes when this
+--- changes (§7); this says what changed. Only things that carry over to the
+--- next visit are listed -- that is what "coming home to something" means.
+---@return string[] lines
+function M.dormant_lines(bstate, def)
+  local out = {}
+  local order = {}
+  for _, t in ipairs(def.targets or {}) do
+    if not order[t.bank] then order[t.bank] = true; order[#order+1] = t.bank end
+  end
+  for _, name in ipairs(order) do
+    local bank = bstate.banks[name]
+    local lit = 0
+    for _, i in ipairs(bank.members) do if bstate.targets[i].lit then lit = lit + 1 end end
+    local level = bstate.meters[name] or 0
+    if lit > 0 or level > 0 then
+      out[#out+1] = ("%s %d/%d%s"):format(name:upper(), lit, #bank.members,
+                                          level > 0 and ("  x%d"):format(1 + level) or "")
+    end
+  end
+  for _, spec in ipairs(def.circuits or {}) do
+    local c = bstate.circuits[spec.id]
+    if c and c.charge > 0 then
+      out[#out+1] = ("%s POWER %d/%d"):format(spec.label, c.charge, c.capacity)
+    end
+  end
+  if (bstate.lit.bumpers or 0) > 0 then
+    out[#out+1] = ("BUMPERS LIT  %d hits"):format(bstate.lit.bumpers)
+  end
+  local m = bstate.mission
+  if m and m.charge > 0 then
+    out[#out+1] = ("RELAY %d/%d"):format(m.charge, mission.GOAL)
+  end
+  return out
+end
+
+local function draw_dormant_status(state, defs)
+  for _, id in ipairs({ "a", "b" }) do
+    if id ~= state.active then
+      local def, view = defs[id], M.view[id]
+      local lines = M.dormant_lines(state.boards[id], def)
+      local x, y = view.x, view.y + def.size.h * view.s + 8
+      love.graphics.setFont(fonts.small)
+      local th = THEME[id]
+      for i, line in ipairs(lines) do
+        love.graphics.setColor(th.wall[1], th.wall[2], th.wall[3], 0.85 * M.hud_a)
+        love.graphics.print(line, x, y + (i - 1) * 15)
+      end
+    end
+  end
+end
+
 ---@param flags table|nil { debug = boolean, paused = boolean }; the
 ---       coordinate overlay is a mode rather than a frame flag: M.inspect
 function M.draw(match, legend, flags)
@@ -1364,7 +1417,8 @@ function M.draw(match, legend, flags)
                M.view[id], id == state.active, heat,
                (t and id == t.to) and { u = incoming_u, aim = t.aim or 0 } or nil, state.boards[id], state.tick)
   end
-  if state.phase == "transit" then draw_transit(state, match.defs) end
+  if state.phase == "transit" then draw_transit(state, match.defs)
+  else draw_dormant_status(state, match.defs) end
   HA = M.hud_a
   if HA > 0.02 then draw_hud(state, match.defs, match.cur, legend) end
   HA = 1

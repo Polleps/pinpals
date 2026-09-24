@@ -18,7 +18,7 @@ return function(H)
         b:despawn()
         m:run(160)
       end
-      A.equal(3, c.charge)
+      A.equal(c.capacity, c.charge)
       A.near(1, b:device_progress("gate"), 0.01)
       local r = defs.a.ramps[1]
       b:spawn(r.path[1], r.path[2] + 38, 0, -1600)
@@ -42,12 +42,13 @@ return function(H)
     H.it("does not admit a ball when powered but the operator has not opened it", function()
       local m = Match.new(defs, 9901)
       m.state.phase = "play"
-      m.state.boards.a.circuits.workshop.charge = 3
+      local w = m.state.boards.a.circuits.workshop
+      w.charge = w.capacity
       local r = defs.a.ramps[1]
       m.boards.a:spawn(r.path[1], r.path[2] + 38, 0, -1600)
       m:run(C.TICK_HZ)
-      A.equal(0, m.state.boards.a.circuits.workshop.attempts)
-      A.equal(3, m.state.boards.a.circuits.workshop.charge)
+      A.equal(0, w.attempts)
+      A.equal(w.capacity, w.charge)
       for _, world in pairs(m.boards) do world.world:destroy() end
     end)
   end)

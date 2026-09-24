@@ -33,9 +33,12 @@ return {
     { x = 438, y = 115, r = 22, restitution = 1.15 },
     { x = 389, y = 220, r = 22, restitution = 1.15 },
   },
+  -- The Forge: a bank in the right shoulder, beside the right orbit and
+  -- facing the left flipper. The orbit stays open outside it (x=560..630).
   targets = {
-    { x = 300, y = 330, w = 28, h = 9, bank = "forge", angle = 0.15 },
-    { x = 426, y = 330, w = 28, h = 9, bank = "forge", angle = -0.15 },
+    { x = 479.1, y = 429.8, w = 28, h = 9, bank = "forge", angle = 0.53 },
+    { x = 505.0, y = 445.0, w = 28, h = 9, bank = "forge", angle = 0.53 },
+    { x = 530.9, y = 460.2, w = 28, h = 9, bank = "forge", angle = 0.53 },
   },
   rollovers = {
     { x = 272, y = 190, w = 36, h = 26, label = "L" },
@@ -49,7 +52,7 @@ return {
       circuit = "workshop", threshold = 180, strong = 850, cooldown = 0.6 },
   },
   circuits = {
-    { id = "workshop", label = "WORKSHOP", capacity = 3, route = "workshop",
+    { id = "workshop", label = "WORKSHOP", capacity = 2, route = "workshop",
       wire = { 411,510, 411,580, 290,580, 240,570 } },
   },
   slingshots = {
