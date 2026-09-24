@@ -46,6 +46,7 @@ function M.new(boards)
     local b = {
       circuits = circuit.new(def), switches = def.switches or {}, switch_ticks = {},
       mission = mission.new(), lane_count = #(def.rollovers or {}),
+      lane_change = def.lane_change or false,
       id = id, flippers = { left = false, right = false },
       devices = {}, targets = {}, banks = {},
       -- §7 cross-board state. `meters` is what the OTHER board has been
@@ -135,6 +136,11 @@ function M.apply_intent(s, it)
 
   if role == "flipper" then
     if it.action == "flip_left" or it.action == "flip_right" then
+      -- Lane change works while the ball is being served too: that is when
+      -- the skill lane is chosen.
+      if it.pressed and board.lane_change and (s.phase == "play" or s.phase == "serve") then
+        mission.rotate(board.mission, board.lane_count, it.action == "flip_left" and -1 or 1)
+      end
       if s.phase ~= "play" then return end
       if it.action == "flip_left"  then board.flippers.left  = it.pressed end
       if it.action == "flip_right" then board.flippers.right = it.pressed end
@@ -244,6 +250,8 @@ function M.update(s)
     if s.timer <= 0 then
       s.phase = "play"
       cmds[#cmds+1] = { kind = "serve", board = s.active }
+      local b = s.boards[s.active]
+      if b.lane_change then mission.start_skill(b.mission, b.lane_count) end
     end
 
   elseif s.phase == "purgatory" then
@@ -320,6 +328,8 @@ function M.update(s)
       s.phase = "play"
       s.transit = nil
       cmds[#cmds+1] = { kind = "arrive", board = t.to, speed = t.speed, aim = t.aim }
+      local b = s.boards[t.to]
+      if b.lane_change then mission.start_skill(b.mission, b.lane_count) end
     end
   end
 

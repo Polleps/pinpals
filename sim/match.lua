@@ -63,6 +63,10 @@ function Match:_snapshot(id)
       snap.devices[did] = { x = dx, y = dy, p = b:device_progress(did) }
     end
   end
+  if next(b.drops) then
+    snap.down = {}
+    for i in pairs(b.drops) do snap.down[i] = b:target_down(i) end
+  end
   for side, g in pairs(b.guards) do
     local gx, gy = g.body:getPosition()
     snap.guards[side] = { x = gx, y = gy, p = b:guard_progress(side) }

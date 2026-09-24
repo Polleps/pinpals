@@ -63,8 +63,30 @@ end
 
 local THEME = {
   a = { wall = {0.98, 0.62, 0.28}, fill = {0.11, 0.075, 0.055} },
-  b = { wall = {0.42, 0.85, 0.95}, fill = {0.055, 0.09, 0.105} },
+  b = { wall = {0.42, 0.85, 0.95}, fill = {0.055, 0.09, 0.105}, panes = 56 },
 }
+
+--- Glasshouse's floor: greenhouse panes. A fine mullion grid with a faint
+--- diagonal glint across every other pane -- enough to say "glass" at a
+--- glance, quiet enough that nothing on the playfield has to compete with it.
+local function draw_panes(def, th, dim)
+  local step = th.panes
+  if not step then return end
+  local w, h = def.size.w, def.size.h
+  love.graphics.setLineWidth(1)
+  love.graphics.setColor(th.wall[1], th.wall[2], th.wall[3], 0.06 * dim)
+  for x = step, w - 1, step do love.graphics.line(x, 0, x, h) end
+  for y = step, h - 1, step do love.graphics.line(0, y, w, y) end
+  love.graphics.setColor(1, 1, 1, 0.025 * dim)
+  for gx = 0, math.ceil(w / step) do
+    for gy = 0, math.ceil(h / step) do
+      if (gx + gy) % 2 == 0 then
+        local x0, y0 = gx * step, gy * step
+        love.graphics.line(x0 + step * 0.2, y0 + step * 0.8, x0 + step * 0.8, y0 + step * 0.2)
+      end
+    end
+  end
+end
 
 local fonts
 
@@ -480,6 +502,16 @@ local function draw_targets(ctx)
     local lit    = tstate and tstate.lit
     local pulse  = fx and fx.hit_pulse(ctx.def.id, "target", i) or 0
     local corners = geo.rect_corners(t)
+    local down = ctx.snap.down and ctx.snap.down[i]
+    if down then
+      -- Dropped: an empty slot in the floor, so the bank reads as "two to go".
+      love.graphics.setColor(0.55 * ctx.dim, 0.98 * ctx.dim, 0.70 * ctx.dim, 0.18)
+      love.graphics.polygon("fill", corners)
+      love.graphics.setColor(0.55, 0.98, 0.70, 0.55 * ctx.dim)
+      love.graphics.setLineWidth(1)
+      love.graphics.polygon("line", corners)
+      goto continue
+    end
     if lit then
       love.graphics.setColor(0.55 * ctx.dim, 0.98 * ctx.dim, 0.70 * ctx.dim, 0.85 + 0.15 * pulse)
     else
@@ -489,6 +521,7 @@ local function draw_targets(ctx)
     love.graphics.setColor(1, 1, 1, (lit and 0.5 or 0.22) + 0.5 * pulse)
     love.graphics.setLineWidth(1.5)
     love.graphics.polygon("line", corners)
+    ::continue::
   end
 end
 
@@ -663,24 +696,41 @@ local function draw_shot_inserts(ctx)
   local m = ctx.bstate and ctx.bstate.mission
   if not m then return end
   love.graphics.setFont(fonts.small)
+  local blink = math.floor(ctx.tick / (C.TICK_HZ / 8)) % 2 == 0
   for i, lane in ipairs(ctx.def.rollovers or {}) do
     local lit = m.lanes[i]
     love.graphics.setColor(0.4, 0.95, 0.85, (lit and 0.8 or 0.22) * ctx.dim)
     love.graphics.ellipse("fill", lane.x, lane.y, lane.w / 2, lane.h / 2)
+    if m.skill_time > 0 and i == m.skill_lane then
+      -- The skill lane flashes gold while its window is open.
+      love.graphics.setColor(1, 0.82, 0.3, (blink and 0.95 or 0.35) * ctx.dim)
+      love.graphics.setLineWidth(2.5)
+      love.graphics.ellipse("line", lane.x, lane.y, lane.w / 2 + 3, lane.h / 2 + 3)
+    end
     love.graphics.setColor(0.6, 1, 0.9, 0.8 * ctx.dim)
     love.graphics.printf(lane.label, lane.x - 20, lane.y - 7, 40, "center")
   end
+  -- One label per bank, under its members' centre, so a bank reads as one
+  -- thing to finish rather than several things that happen to share a word.
+  local banks, order = {}, {}
   for _, t in ipairs(ctx.def.targets or {}) do
-    love.graphics.setColor(0.9, 0.85, 0.65, 0.75 * ctx.dim)
-    love.graphics.printf(t.bank:upper(), t.x - 32, t.y + 13, 64, "center")
+    local b = banks[t.bank]
+    if not b then b = { x = 0, y = 0, n = 0 }; banks[t.bank] = b; order[#order+1] = t.bank end
+    b.x, b.y, b.n = b.x + t.x, math.max(b.y, t.y), b.n + 1
+  end
+  love.graphics.setColor(0.9, 0.85, 0.65, 0.75 * ctx.dim)
+  for _, name in ipairs(order) do
+    local b = banks[name]
+    love.graphics.printf(name:upper(), b.x / b.n - 40, b.y + 13, 80, "center")
   end
   local ready = m.charge >= mission.GOAL
+  local ins = ctx.def.inserts or { x = ctx.def.size.w / 2, y = 638 }
   love.graphics.setColor(1, 0.78, 0.28, (ready and 1 or 0.6) * ctx.dim)
   love.graphics.printf(ready and "SHOOT PASS - JACKPOT" or "BUILD THE RELAY",
-    ctx.def.size.w / 2 - 140, 608, 280, "center")
+    ins.x - 140, ins.y - 30, 280, "center")
   for i = 1, mission.GOAL do
     love.graphics.setColor(1, 0.78, 0.28, (i <= m.charge and 0.95 or 0.12) * ctx.dim)
-    love.graphics.circle("fill", ctx.def.size.w / 2 - 70 + (i - 1) * 20, 638, 6)
+    love.graphics.circle("fill", ins.x - 70 + (i - 1) * 20, ins.y, 6)
   end
   love.graphics.setColor(0.6, 0.95, 1, 0.8 * ctx.dim)
   for _, r in ipairs(ctx.def.ramps or {}) do
@@ -714,7 +764,7 @@ local function draw_board(def, snap, prev, alpha, view, active, heat, incoming, 
   local ctx = {
     def = def, snap = snap, prev = prev, alpha = alpha, view = view,
     active = active, dim = active and 1.0 or 0.45,
-    heat = heat, incoming = incoming, bstate = bstate,
+    heat = heat, incoming = incoming, bstate = bstate, tick = tick or 0,
   }
 
   love.graphics.push()
@@ -742,6 +792,7 @@ local function draw_board(def, snap, prev, alpha, view, active, heat, incoming, 
   love.graphics.setScissor(view.x + sx0 * view.s, view.y + sy0 * view.s,
                            (sx1 - sx0) * view.s, (def.size.h - sy0) * view.s)
 
+  draw_panes(def, th, ctx.dim)
   circuit_draw.draw(def, bstate, ctx.dim, fonts, tick)
   draw_shot_inserts(ctx)
   draw_drain_line(ctx)
@@ -1113,7 +1164,12 @@ local function hud_mission(state, x, y)
   col(1, 1, 1, 0.5)
   love.graphics.print("Bumpers / new targets / new lanes +1   Bank / skyway +3", x, y + 114)
   love.graphics.print("8 charge lights a 2,500 jackpot. Pass to collect; repeat to grow it.", x, y + 134)
-  love.graphics.print("All 3 lanes: +500   Skyway: +750   Skyway then pass: +1,500", x, y + 154)
+  if state.boards[state.active].lane_change then
+    love.graphics.print("Flippers move the lit lanes. Gold lane after a serve/pass: SKILL +2,000",
+                        x, y + 154)
+  else
+    love.graphics.print("All 3 lanes: +500   Skyway: +750   Skyway then pass: +1,500", x, y + 154)
+  end
   col(0.55, 0.95, 1)
   if (state.shot_notice_time or 0) > 0 then
     love.graphics.print(state.shot_notice, x, y + 185)

@@ -163,7 +163,7 @@ end
 local function solids_of(board)
   local out = {}
   for i, t in ipairs(board.targets or {}) do
-    out[#out+1] = { label = "target " .. i, x = t.x, y = t.y, c = M.rect_corners(t) }
+    out[#out+1] = { label = "target " .. i, x = t.x, y = t.y, c = M.rect_corners(t), target = t }
   end
   for i, sl in ipairs(board.slingshots or {}) do
     local c = sl.p
@@ -295,6 +295,18 @@ end
 -- 3. Wedges
 ---------------------------------------------------------------------------
 
+--- Are two targets members of one bank laid end to end -- same bank, same
+--- angle, and each centre on the other's long axis? Then the seam between
+--- them is one flat face with a hairline in it, not two surfaces converging,
+--- and a ball can no more rest in it than in a crack in a wall.
+local function one_face(a, b)
+  if a.bank ~= b.bank or math.abs((a.angle or 0) - (b.angle or 0)) > 1e-3 then return false end
+  local ang = a.angle or 0
+  local dx, dy = b.x - a.x, b.y - a.y
+  local across = math.abs(-math.sin(ang) * dx + math.cos(ang) * dy)
+  return across < 0.5
+end
+
 --- Two surfaces closer together than the ball is wide form a throat the ball
 --- cannot pass but can rest in. Board B's two rails converged to 10.8px and
 --- caught the ball 19 times in 182 drops -- they never actually crossed, which
@@ -398,13 +410,14 @@ local function check_wedges(board, segs, out)
     for sj = si + 1, #solids do
       local other = solids[sj]
       local best = math.huge
+      local seam = sol.target and other.target and one_face(sol.target, other.target)
       for _, e1 in ipairs(outline(sol)) do
         for _, e2 in ipairs(outline(other)) do
           best = math.min(best, seg_seg(e1[1], e1[2], e1[3], e1[4],
                                         e2[1], e2[2], e2[3], e2[4]))
         end
       end
-      if best < THROAT then
+      if best < THROAT and not (seam and best <= C.BANK_SEAM) then
         out[#out+1] = {
           kind = "wedge", x = sol.x, y = sol.y,
           msg = ("%s and %s are %.1fpx apart; the ball is %.1fpx wide")

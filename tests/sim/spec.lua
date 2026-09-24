@@ -689,11 +689,19 @@ return function(H)
       return false
     end
 
+    --- A magnet holding the ball is the operator's choice, not a pocket --
+    --- but only for as long as its duty limit allows.
+    local function magnet_hold(b)
+      for _, dev in pairs(b.devices) do
+        if dev.kind == "magnet" and dev.holding then return dev.def end
+      end
+    end
+
     it("survives two minutes of random play without stalling", function()
       local ACTIONS = { "flip_left", "flip_right", "operator_gate", "operator_paddle" }
       math.randomseed(7)
       local m = Match.new(boards)
-      local still = 0
+      local still, held = 0, 0
       for tick = 1, C.TICK_HZ * 120 do
         if tick % 14 == 0 then
           m:push(intents.new(math.random(2), ACTIONS[math.random(4)],
@@ -704,11 +712,16 @@ return function(H)
         if s.phase == "play" then
           local b = m.boards[s.active]
           local x, y = b:ball_pos()
-          if x and b:ball_speed() < 14 and not on_flipper(m.defs[s.active], x, y) then
-            still = still + C.FIXED_DT
+          local mag = magnet_hold(b)
+          if mag then
+            held, still = held + C.FIXED_DT, 0
+            A.truthy(held <= mag.max_on + mag.travel + 0.1,
+              ("magnet %s held the ball %.1fs, past its duty limit"):format(mag.id, held))
+          elseif x and b:ball_speed() < 14 and not on_flipper(m.defs[s.active], x, y) then
+            still, held = still + C.FIXED_DT, 0
             A.truthy(still <= 1.5,
               ("ball stuck on %s at (%.0f, %.0f)"):format(s.active, x, y))
-          else still = 0 end
+          else still, held = 0, 0 end
         end
       end
     end)

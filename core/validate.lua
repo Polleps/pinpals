@@ -61,6 +61,10 @@ function M.board(b)
     end
   end
 
+  if b.lane_change ~= nil and type(b.lane_change) ~= "boolean" then
+    e[#e+1] = "lane_change: expected a boolean"
+  end
+
   -- Slingshots: three points, and a kick that actually kicks. A slingshot
   -- with restitution <= 1 is a wall shaped like a slingshot, which is the
   -- kind of thing that reads fine on screen and silently does nothing.
@@ -92,6 +96,9 @@ function M.board(b)
   for i, t in ipairs(b.targets or {}) do
     if not (isnum(t.x) and isnum(t.y) and isnum(t.w) and isnum(t.h)) then
       e[#e+1] = ("targets[%d]: expected x, y, w, h"):format(i)
+    end
+    if t.drop ~= nil and type(t.drop) ~= "boolean" then
+      e[#e+1] = ("targets[%d].drop: expected a boolean"):format(i)
     end
     if t.angle ~= nil and not isnum(t.angle) then
       e[#e+1] = ("targets[%d].angle: expected a number"):format(i)

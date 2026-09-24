@@ -64,6 +64,9 @@ C.CURVE_MAX_DEPTH = 10
 -- converging rails) was between two different polylines, which this cannot
 -- exempt at all -- and far more than a tessellation step.
 C.THROAT_RUN     = C.BALL_RADIUS * 4
+-- A bank's members laid end to end may be this close without the wedge check
+-- calling the gap a throat: it is a seam in one flat face (core/geometry.lua).
+C.BANK_SEAM      = 3
 -- There is deliberately no margin on top of the ball's own width here, and it
 -- was tried. A ramp foot once left an 18.0px gap against the tip of a wall --
 -- 0.7px more than the ball is wide, so the check passed it -- and the soak

@@ -42,7 +42,7 @@ end
 --- identities in numbers: a bumper is chaos you did not aim, a target is a
 --- shot you meant, and a bank is a sequence you and your partner planned.
 local BASE = {
-  lane = 75, lanes = 500, ramp = 750, combo = 1500, jackpot = 2500,
+  lane = 75, lanes = 500, skill = 2000, ramp = 750, combo = 1500, jackpot = 2500,
   pass   = C.SCORE_PASS,
   bumper = C.SCORE_BUMPER,
   sling  = C.SCORE_SLING,

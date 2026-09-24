@@ -84,7 +84,43 @@ local function build_targets(self, def)
     f:setRestitution(t.restitution or 0.45)
     f:setFriction(0.10)
     ud(f, "target", i)
+    if t.drop then self.drops[i] = { fixture = f, down = false } end
   end
+end
+
+--- Drop targets follow core/'s lit flags: a lit drop target is DOWN, which
+--- in physics means a sensor the ball rolls straight over. Whether one is
+--- lit is a rule, so this only mirrors it.
+---
+--- A target never pops back up through the ball. If the ball is sitting
+--- over its slot when the bank resets, it stays down until the ball has
+--- moved off -- a solid appearing around the ball would be pushed out by
+--- the solver at whatever speed it takes.
+function Board:_sync_drops(bstate)
+  local lit = bstate and bstate.targets
+  if not lit then return end
+  for i, d in pairs(self.drops) do
+    local want = lit[i] and lit[i].lit or false
+    if d.down and not want and self:_ball_over_target(i) then want = true end
+    if want ~= d.down then
+      d.down = want
+      d.fixture:setSensor(want)
+    end
+  end
+end
+
+function Board:_ball_over_target(i)
+  local x, y = self:ball_pos()
+  if not x then return false end
+  local t = self.def.targets[i]
+  local reach = math.max(t.w, t.h) / 2 + C.BALL_RADIUS + 2
+  return math.abs(x - t.x) < reach and math.abs(y - t.y) < reach
+end
+
+--- Is target i currently down? For the renderer and tests.
+function Board:target_down(i)
+  local d = self.drops[i]
+  return d ~= nil and d.down
 end
 
 local function build_rollovers(self, def)
@@ -270,6 +306,7 @@ function Board.new(def, seed)
   self.devices  = {}
   self.guards   = {}
   self.ramps    = {}
+  self.drops    = {}
   self.ball     = nil
   -- Which ramp the ball is on, and how far along it. nil means the playfield,
   -- which is where a ball starts and where it always ends up.
@@ -615,6 +652,8 @@ function Board:_begin(fa, fb, _)
     }
 
   elseif other.kind == "target" then
+    -- A dropped target is a hole in the floor, not a thing to hit.
+    if self.drops[other.id] and self.drops[other.id].down then return end
     local t = self.def.targets[other.id]
     self.events[#self.events+1] = {
       kind = "target", board = self.id, index = other.id, x = t.x, y = t.y,
@@ -722,6 +761,7 @@ function Board:step(bstate, has_ball)
     drive_device(dev, dstate and dstate.commanded and dev.enabled, dt)
   end
   self:_step_magnets()
+  self:_sync_drops(bstate)
   -- Both guards travel on every switch: one leaves as the other arrives, so
   -- for GUARD_TRAVEL seconds neither lane is sealed. That gap is the trade
   -- (§6.2) and it is why the bars move rather than teleporting.

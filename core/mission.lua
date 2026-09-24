@@ -2,16 +2,50 @@
 --- No random objectives: every lit insert corresponds to a shot on the board.
 local C = require("core.constants")
 local score = require("core.score")
-local M = { GOAL = 8, COMBO_TIME = 12 }
+local M = { GOAL = 8, COMBO_TIME = 12, SKILL_TIME = 3.0 }
 
 function M.new()
   return { charge = 0, jackpots = 0, lanes = {}, lane_tick = {}, combo = 0,
-           rides = 0, notice = "", notice_time = 0 }
+           rides = 0, notice = "", notice_time = 0,
+           -- Skill shot: which lane is flashing, and for how much longer.
+           skill_lane = 2, skill_time = 0, skills = 0 }
 end
 
 function M.update(m, dt, playing)
   m.notice_time = math.max(0, m.notice_time - dt)
-  if playing then m.combo = math.max(0, m.combo - dt) end
+  if playing then
+    m.combo = math.max(0, m.combo - dt)
+    m.skill_time = math.max(0, m.skill_time - dt)
+  end
+end
+
+--- Lane change: the flipper buttons shift every lit lane, and the flashing
+--- skill lane with them, one place left or right with wrap-around. That is
+--- what makes a ball falling toward the lanes something to steer rather than
+--- something to watch.
+---@param m table mission state
+---@param count integer lanes on this board
+---@param dir integer -1 for left, +1 for right
+function M.rotate(m, count, dir)
+  if count < 2 then return end
+  local moved = {}
+  for i in pairs(m.lanes) do moved[(i - 1 + dir) % count + 1] = true end
+  m.lanes = moved
+  m.skill_lane = (m.skill_lane - 1 + dir) % count + 1
+end
+
+--- Open the skill-shot window: the ball has just been served, or has just
+--- arrived from the partner's board with the sender's aim on it.
+---
+--- The flashing lane moves on one place each window. The serve and most
+--- arrivals come down the middle lane (tests/probe_fun counts the lanes), so
+--- a skill lane that stayed put there would be paid for doing nothing; one
+--- that moves has to be steered to the ball with the flippers, or the ball
+--- aimed at it by the sender in transit.
+function M.start_skill(m, count)
+  if count < 1 then return end
+  m.skill_lane = (m.skill_lane % count) + 1
+  m.skill_time = M.SKILL_TIME
 end
 
 local function announce(m, text)
@@ -33,6 +67,17 @@ function M.shot(s, ev)
     if s.tick - (m.lane_tick[ev.index] or -10000) < C.TICK_HZ / 2 then return 0 end
     m.lane_tick[ev.index] = s.tick
     local value = score.award(s.stats, "lane")
+    -- The first lane crossed inside the window settles the skill shot either
+    -- way: through the flashing lane pays, any other lane spends it.
+    if m.skill_time > 0 then
+      m.skill_time = 0
+      if ev.index == m.skill_lane then
+        m.skills = m.skills + 1
+        value = value + score.award(s.stats, "skill")
+        M.charge(m, 2)
+        announce(m, "SKILL SHOT!")
+      end
+    end
     if not m.lanes[ev.index] then
       m.lanes[ev.index] = true
       M.charge(m, 1)

@@ -137,7 +137,7 @@ return function()
             "banks", "pts/s"))
   for _, id in ipairs({ "a", "b" }) do
     local def = boards[id]
-    local r = ball_life(def, 5, 12)
+    local r = ball_life(def, tonumber(os.getenv("SEEDS") or "5"), 12)
     print(("%-12s %7.1f %7.2f %8.4f %7.0f%% %8d %8d %7.0f")
       :format(def.name, drain_gap(def), r.mean, r.dps, 100 * r.survival,
               r.hits.target, r.hits.bank, r.pps))
