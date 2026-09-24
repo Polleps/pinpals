@@ -47,6 +47,9 @@ tools, not gates — run one with `PINPALS_SUITE=tests.probe_reach love . --test
 | probe | answers |
 |---|---|
 | `reach` | where can a flipper shot actually go, and what do shots do |
+| `shots` | what each flipper shot HITS, per feature; `MAP=1` adds where shots travel upward -- place content with this |
+| `received` | can a ball arriving from the tube be passed on, and which side the misses drain |
+| `magnet` | what Glasshouse's magnet catches, where its release lands, what it saves |
 | `serve` | what a serve does, what the jitter changes, and what it costs in play |
 | `identity` | ball life, drain rate and points/s per board (§13.1) |
 | `timing`, `approach`, `speed_window` | how hard is it to receive a pass, and why |

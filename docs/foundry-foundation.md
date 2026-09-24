@@ -17,7 +17,8 @@ retains the previous local edit's shortened y=470 channel, now at x=350.
 ## Playing the workshop
 
 1. Shoot through the striped generator at (411,490). A crossing at 180px/s or
-   more gives one power; 850px/s gives two. Three powers ready the workshop.
+   more gives one power; 850px/s gives two. Two powers ready the workshop (was three
+   until 2026-09-24: in eight matches only four runs happened).
 2. The operator holds the existing gate action (P2 Up arrow while Foundry is
    active; gamepad A). The powered gate takes 0.3 seconds to open.
 3. Shoot the workshop entrance at (240,550). Entry consumes the stored power,

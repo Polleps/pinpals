@@ -236,6 +236,21 @@ The two boards are **different, and interconnected by state**. Not mirrors.
 
 **Foundry is where a rally survives. Glasshouse is where it pays.**
 
+> **Current, 2026-09-24** (Glasshouse v4, `docs/glasshouse.md`; `probe_identity`, 12 seeds):
+>
+> | | Foundry | Glasshouse |
+> |---|---|---|
+> | Content | 3-bumper arena, workshop loop, 3-target Forge | 3 drop-target Vault, 3-target Gallery, S-U-N lanes with lane change, skyway |
+> | Operator devices | post, workshop gate, guard | post, **magnet**, guard |
+> | Drain gap | 26.9px | 35.9px |
+> | Mean ball life | 8.50s | 7.46s |
+> | Drains per second | 0.067 | 0.075 |
+> | Points per second | 45 | 244 |
+>
+> Glasshouse still pays ~5x and still drains faster, but by ~12% rather than 2.3x.
+> The gap sweep showed the gap is not what sets the drain rate. The table below and
+> the text after it are the 2026-09-06 measurements, kept for history.
+
 | | Foundry | Glasshouse |
 |---|---|---|
 | Character | chaotic, forgiving, cheap | clean, precise, expensive |

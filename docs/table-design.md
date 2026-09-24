@@ -357,6 +357,12 @@ inlanes and §9.4's quiet bumpers give it nothing to say.
 
 ## 10. What to do, in order
 
+> **Status 2026-09-24** (`docs/glasshouse.md`): P3 swept (gap 42.9 → 35.9px; the gap
+> turned out not to set the drain rate), P4 built on Glasshouse (skill lane after
+> serve and arrival, with lane change), P5 built (Glasshouse's Vault). P2 was
+> taken as "accept a prestige shot": the skyway is one-way and rides 5% of swept
+> shots. P0 and P1 are untouched.
+
 Each item names the probe that would prove it. Nothing below is a large change; the
 first three are corrections rather than features.
 
